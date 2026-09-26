@@ -1,5 +1,6 @@
 package io.github.opencubicchunks.cubicchunks.integrationtest.server.level;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -27,6 +28,7 @@ import io.github.opencubicchunks.cubicchunks.testutils.BaseTest;
 import io.github.opencubicchunks.cubicchunks.testutils.CloseableReference;
 import io.github.opencubicchunks.cubicchunks.world.level.cube.LevelCube;
 import io.github.opencubicchunks.cubicchunks.world.level.cube.ProtoCube;
+import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ChunkMap;
 import net.minecraft.server.level.DistanceManager;
 import net.minecraft.server.level.ServerChunkCache;
@@ -34,6 +36,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.TicketType;
 import net.minecraft.server.level.progress.ProcessorChunkProgressListener;
 import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.ProtoChunk;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
@@ -400,6 +403,30 @@ public class IntegrationTestServerCubeCache extends BaseTest {
                     }
                 }
             }
+        }
+    }
+
+    /**
+     * Cube {@code (0,0,0)} loaded to {@link ChunkStatus#FULL} keeps the sinusoidal smooth-stone fill from
+     * {@code CubeStatusTasks.generateNoise}.
+     */
+    @Test
+    public void fullCubeSinusoidalSurface() throws Exception {
+        assertEquals(32, CubicConstants.DIAMETER_IN_BLOCKS);
+        try (var serverChunkCacheRef = createServerChunkCache(false)) {
+            var serverCubeCache = (ServerCubeCache) serverChunkCacheRef.value();
+            var cubeAccess = serverCubeCache.cc_getCube(0, 0, 0, ChunkStatus.FULL, true);
+            assertInstanceOf(LevelCube.class, cubeAccess);
+
+            // (31, 31) surfaces at y=20. (0, 0) surfaces at y=-5, so this cube is air there.
+            BlockPos surface = new BlockPos(31, 20, 31);
+            BlockPos aboveSurface = new BlockPos(31, 21, 31);
+            BlockPos columnFloor = new BlockPos(31, 0, 31);
+            BlockPos airColumn = new BlockPos(0, 0, 0);
+            assertEquals(Blocks.SMOOTH_STONE.defaultBlockState(), cubeAccess.getBlockState(surface));
+            assertEquals(Blocks.AIR.defaultBlockState(), cubeAccess.getBlockState(aboveSurface));
+            assertEquals(Blocks.SMOOTH_STONE.defaultBlockState(), cubeAccess.getBlockState(columnFloor));
+            assertEquals(Blocks.AIR.defaultBlockState(), cubeAccess.getBlockState(airColumn));
         }
     }
 
