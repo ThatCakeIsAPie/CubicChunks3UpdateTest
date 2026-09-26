@@ -46,6 +46,8 @@ JUnit skipped (9): `TestClientCubeCache` (3), packet handler tests (3), `TestMin
 
 `CubicChunksCore:test` is SKIPPED by design.
 
+GitHub Actions on this PR (`Build Pull Request`, commit `f9b54a20`): **3/3 green** — `build-pr`, `call-test / test` (`./gradlew check`), `call-cleanup`. JDK 21 pin is sufficient for CI.
+
 ### runServer smoke details
 
 - Launch target `neoforgeserverdev`, MC 1.21.6, NeoForge 21.6.4-beta, Java 21.
