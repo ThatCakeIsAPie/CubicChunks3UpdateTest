@@ -19,6 +19,7 @@ import io.github.opencubicchunks.cc_core.world.level.CloPos;
 import io.github.opencubicchunks.cubicchunks.CubicChunks;
 import io.github.opencubicchunks.cubicchunks.mixin.dasmsets.ChunkToCubeSet;
 import io.github.opencubicchunks.cubicchunks.world.level.chunklike.CloAccess;
+import io.github.opencubicchunks.cubicchunks.world.level.cube.storage.CubeSerializer;
 import io.github.opencubicchunks.cubicchunks.world.lighting.CubeLightData;
 import it.unimi.dsi.fastutil.longs.LongSet;
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
@@ -128,9 +129,10 @@ public abstract class CubeAccess implements CloAccess {
     }
 
     private static void replaceMissingSections(Registry<Biome> biomeRegistry, LevelChunkSection[] sections) {
+        var factory = CubeSerializer.palettedFactory(biomeRegistry);
         for (int i = 0; i < sections.length; ++i) {
             if (sections[i] == null) {
-                sections[i] = new LevelChunkSection(biomeRegistry);
+                sections[i] = new LevelChunkSection(factory);
             }
         }
     }

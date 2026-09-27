@@ -19,7 +19,6 @@ import io.github.opencubicchunks.cc_core.api.CubicConstants;
 import io.github.opencubicchunks.cubicchunks.world.level.cube.LevelCube;
 import net.minecraft.core.Vec3i;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.server.level.progress.LoggerChunkProgressListener;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
@@ -40,7 +39,7 @@ public class Misc {
     }
 
     public static int chebyshevDistance(ChunkPos a, ChunkPos b) {
-        return Math.max(Math.abs(a.x - b.x), Math.abs(a.z - b.z));
+        return Math.max(Math.abs(a.x() - b.x()), Math.abs(a.z() - b.z()));
     }
 
     public static CloseableReference<ServerLevel> setupServerLevel() {
@@ -62,10 +61,8 @@ public class Misc {
         return new CloseableReference<>(new ServerLevel(mock(RETURNS_DEEP_STUBS),
                 // We run everything on the main thread as Mockito has race conditions when multiple threads call into it
                 // (which occurs when using RETURNS_DEEP_STUBS)
-                Runnable::run, levelStorageAccessMock, mock(RETURNS_DEEP_STUBS), mock(RETURNS_DEEP_STUBS), levelStemMock,
-                // Need to mock an implementation of the interface, so that it also implements CloProgressListener
-                Mockito.<LoggerChunkProgressListener>mock(RETURNS_DEEP_STUBS), false, 0, List.of(), false, mock(RETURNS_DEEP_STUBS)),
-                randomStateMockedStatic);
+                Runnable::run, levelStorageAccessMock, mock(RETURNS_DEEP_STUBS), mock(RETURNS_DEEP_STUBS), levelStemMock, false, 0, List.of(),
+                false), randomStateMockedStatic);
     }
 
     /**

@@ -87,7 +87,7 @@ public abstract class MixinChunkGenerationTask implements CloGenerationTask {
         // (for cube sizes greater than 16)
         StaticCache2D<GenerationChunkHolder> staticcache2d = new StaticCache2D<>(Coords.cubeToSection(pos.getX() - cubeRadius, 0),
                 Coords.cubeToSection(pos.getZ() - cubeRadius, 0), chunkDiameter, chunkDiameter,
-                (x, z) -> chunkMap.acquireGeneration(ChunkPos.asLong(x, z)));
+                (x, z) -> chunkMap.acquireGeneration(ChunkPos.pack(x, z)));
         var chunkGenerationTask = new ChunkGenerationTask(chunkMap, targetStatus, null, staticcache2d);
         ((MixinChunkGenerationTask) (Object) chunkGenerationTask).cc_cubePos = pos;
         ((MixinChunkGenerationTask) (Object) chunkGenerationTask).cc_cubeCache = StaticCache3D.create(pos.getX(), pos.getY(), pos.getZ(), cubeRadius,

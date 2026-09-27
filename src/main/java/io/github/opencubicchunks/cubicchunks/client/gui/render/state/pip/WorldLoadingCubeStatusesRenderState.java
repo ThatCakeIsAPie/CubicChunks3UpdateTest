@@ -4,20 +4,20 @@ import javax.annotation.Nullable;
 
 import io.github.opencubicchunks.cubicchunks.client.gui.render.pip.WorldLoadingCubeStatusesRenderer;
 import net.minecraft.client.gui.navigation.ScreenRectangle;
-import net.minecraft.client.gui.render.state.pip.PictureInPictureRenderState;
-import net.minecraft.server.level.progress.StoringChunkProgressListener;
+import net.minecraft.client.renderer.state.gui.pip.PictureInPictureRenderState;
+import net.minecraft.server.level.progress.ChunkLoadStatusView;
 
 /**
  * PiP render state for {@link WorldLoadingCubeStatusesRenderer}.
- * Stores a reference to the {@link StoringChunkProgressListener} used for tracking world load progress.
+ * Stores the column {@link ChunkLoadStatusView} used for world-load progress. 26.1 has no per-cube status map.
  */
 public record WorldLoadingCubeStatusesRenderState(
-        StoringChunkProgressListener chunkProgressListener, int x0, int y0, int x1, int y1, float scale, @Nullable ScreenRectangle scissorArea,
+        ChunkLoadStatusView chunkLoadStatusView, int x0, int y0, int x1, int y1, float scale, @Nullable ScreenRectangle scissorArea,
         @Nullable ScreenRectangle bounds
 ) implements PictureInPictureRenderState {
     public WorldLoadingCubeStatusesRenderState(
-            StoringChunkProgressListener chunkProgressListener, int x0, int y0, int x1, int y1, float scale, @Nullable ScreenRectangle scissorArea
+            ChunkLoadStatusView chunkLoadStatusView, int x0, int y0, int x1, int y1, float scale, @Nullable ScreenRectangle scissorArea
     ) {
-        this(chunkProgressListener, x0, y0, x1, y1, scale, scissorArea, PictureInPictureRenderState.getBounds(x0, y0, x1, y1, scissorArea));
+        this(chunkLoadStatusView, x0, y0, x1, y1, scale, scissorArea, PictureInPictureRenderState.getBounds(x0, y0, x1, y1, scissorArea));
     }
 }

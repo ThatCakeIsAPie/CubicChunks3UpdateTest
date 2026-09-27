@@ -7,6 +7,7 @@ import javax.annotation.Nullable;
 
 import io.github.opencubicchunks.cc_core.world.level.CloPos;
 import io.github.opencubicchunks.cubicchunks.world.level.cube.ProtoCube;
+import io.github.opencubicchunks.cubicchunks.world.level.cube.storage.CubeSerializer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Registry;
 import net.minecraft.nbt.CompoundTag;
@@ -34,7 +35,8 @@ public interface ProtoClo extends CloAccess {
         if (cloPos.isCube()) {
             return new ProtoCube(cloPos.cubePos(), upgradeData, levelHeightAccessor, biomeRegistry, blendingData);
         } else {
-            return (ProtoClo) new ProtoChunk(cloPos.chunkPos(), upgradeData, levelHeightAccessor, biomeRegistry, blendingData);
+            return (ProtoClo) new ProtoChunk(cloPos.chunkPos(), upgradeData, levelHeightAccessor, CubeSerializer.palettedFactory(biomeRegistry),
+                    blendingData);
         }
     }
 
@@ -46,8 +48,8 @@ public interface ProtoClo extends CloAccess {
         if (cloPos.isCube()) {
             return new ProtoCube(cloPos.cubePos(), upgradeData, sections, blockTicks, liquidTicks, levelHeightAccessor, biomeRegistry, blendingData);
         } else {
-            return (ProtoClo) new ProtoChunk(cloPos.chunkPos(), upgradeData, sections, blockTicks, liquidTicks, levelHeightAccessor, biomeRegistry,
-                    blendingData);
+            return (ProtoClo) new ProtoChunk(cloPos.chunkPos(), upgradeData, sections, blockTicks, liquidTicks, levelHeightAccessor,
+                    CubeSerializer.palettedFactory(biomeRegistry), blendingData);
         }
     }
 

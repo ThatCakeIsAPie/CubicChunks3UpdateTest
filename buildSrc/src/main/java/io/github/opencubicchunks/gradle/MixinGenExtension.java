@@ -23,7 +23,7 @@ import java.util.stream.Collectors;
 import com.google.gson.stream.JsonWriter;
 import org.gradle.api.Action;
 import org.gradle.api.file.SourceDirectorySet;
-import org.gradle.api.plugins.JavaPluginConvention;
+import org.gradle.api.plugins.JavaPluginExtension;
 import org.gradle.api.tasks.SourceSet;
 
 // Note: this intentionally only contains the parts that I actually use
@@ -171,8 +171,8 @@ public class MixinGenExtension {
         }
     }
 
-    void generateFiles(JavaPluginConvention convention) throws IOException {
-        convention.getSourceSets().forEach(sourceSet -> {
+    void generateFiles(JavaPluginExtension javaPlugin) throws IOException {
+        javaPlugin.getSourceSets().forEach(sourceSet -> {
             Map<String, Action<MixinConfig>> configs = configsBySourceSet.get(sourceSet);
             if (configs == null) {
                 throw new RuntimeException("No mixin config was registered for source set " + sourceSet);
@@ -241,7 +241,7 @@ public class MixinGenExtension {
                             writer.name("conformVisibility").value(config.conformVisibility);
                             writer.endObject();
                         }
-                        writeMixins(convention, sourceSet, name, config, writer);
+                        writeMixins(sourceSet, name, config, writer);
 
                         writer.endObject();
                     }
@@ -252,7 +252,7 @@ public class MixinGenExtension {
         });
     }
 
-    private void writeMixins(JavaPluginConvention convention, SourceSet sourceSet, String name, MixinConfig config, JsonWriter writer)
+    private void writeMixins(SourceSet sourceSet, String name, MixinConfig config, JsonWriter writer)
             throws IOException {
         Set<Path> classes = getMixinClasses(config, sourceSet.getAllJava());
 

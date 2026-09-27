@@ -23,7 +23,7 @@ public class ServerConfig extends BaseConfig {
     private static final String KEY_CHUNK_DIMENSIONS = KEY_WORLDSTYLES + ".vanillaDimensions";
 
     private final WorldStyle defaultWorldStyle;
-    // TODO should this be a Map<ResourceLocation, ...> instead?
+    // TODO should this be a Map<Identifier, ...> instead?
     private final Map<String, WorldStyle> overrides = new HashMap<>();
 
     private ServerConfig(CommentedConfig config) {
@@ -43,7 +43,7 @@ public class ServerConfig extends BaseConfig {
     }
 
     public WorldStyle getWorldStyle(ResourceKey<Level> dimension) {
-        return overrides.getOrDefault(dimension.location().toString(), defaultWorldStyle);
+        return overrides.getOrDefault(dimension.identifier().toString(), defaultWorldStyle);
     }
 
     private static CommentedConfig createDefaultConfig() {
@@ -62,7 +62,7 @@ public class ServerConfig extends BaseConfig {
                         """);
         config.set(KEY_CUBIC_DIMENSIONS, List.of());
         config.set(KEY_HYBRID_DIMENSIONS, List.of());
-        config.set(KEY_CHUNK_DIMENSIONS, List.of(Level.END.location().toString()));
+        config.set(KEY_CHUNK_DIMENSIONS, List.of(Level.END.identifier().toString()));
         config.setComment(KEY_CUBIC_DIMENSIONS, """
                  Explicitly sets the world style for each dimension. Overrides the default in defaultWorldStyle.
                  Note that this only affects dimensions that have not yet been generated.

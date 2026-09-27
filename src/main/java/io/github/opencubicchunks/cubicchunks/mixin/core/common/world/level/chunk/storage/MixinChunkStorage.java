@@ -16,16 +16,18 @@ import io.github.opencubicchunks.cubicchunks.mixin.dasmsets.ChunkToCloSet;
 import io.github.opencubicchunks.cubicchunks.world.level.cube.storage.CubeRegionStorage;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.level.ChunkPos;
-import net.minecraft.world.level.chunk.storage.ChunkStorage;
+import net.minecraft.util.datafix.DataFixTypes;
 import net.minecraft.world.level.chunk.storage.RegionStorageInfo;
+import net.minecraft.world.level.chunk.storage.SimpleRegionStorage;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-@Dasm(value = ChunkToCloSet.class, target = @Ref(ChunkStorage.class))
-@Mixin(ChunkStorage.class)
+@Dasm(value = ChunkToCloSet.class, target = @Ref(SimpleRegionStorage.class))
+@Mixin(SimpleRegionStorage.class)
 public abstract class MixinChunkStorage {
     @Shadow public abstract boolean isOldChunkAround(ChunkPos chunkPos, int radius);
 
@@ -39,7 +41,7 @@ public abstract class MixinChunkStorage {
     private volatile @Nullable CubeRegionStorage cc_cubeStorage;
 
     @Inject(method = "<init>", at = @At("RETURN"))
-    private void cc_initCubeStorage(RegionStorageInfo info, Path folder, DataFixer fixerUpper, boolean sync, CallbackInfo ci) {
+    private void cc_initCubeStorage(RegionStorageInfo info, Path folder, DataFixer fixerUpper, boolean sync, DataFixTypes dataFixType, CallbackInfo ci) {
         this.cc_storageInfo = info;
         this.cc_regionFolder = folder;
         this.cc_sync = sync;
@@ -70,8 +72,8 @@ public abstract class MixinChunkStorage {
         return this.cc_cubeStorage().write(cloPos, tagSupplier);
     }
 
-    @Inject(method = "flushWorker", at = @At("RETURN"))
-    private void cc_flushCubeWorker(CallbackInfo ci) {
+    @Inject(method = "synchronize", at = @At("RETURN"))
+    private void cc_flushCubeWorker(boolean flush, CallbackInfoReturnable<CompletableFuture<Void>> ci) {
         CubeRegionStorage storage = this.cc_cubeStorage;
         if (storage != null) {
             storage.flush();

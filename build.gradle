@@ -13,7 +13,7 @@ plugins {
     id 'maven-publish'
     id("com.diffplug.spotless") version "7.0.4"
     id "checkstyle"
-    id 'net.neoforged.moddev' version '2.0.90'
+    id 'net.neoforged.moddev' version '2.0.147'
     id("io.github.opencubicchunks.javaheaders").version("1.2.8")
     id("io.github.opencubicchunks.gradle.mcGitVersion")
     id("io.github.opencubicchunks.gradle.mixingen")
@@ -83,7 +83,7 @@ mixinGen {
     filePattern = "cubicchunks.mixins.%s.json"
     defaultRefmap = "CubicChunks-refmap.json"
     defaultPackagePrefix = "io.github.opencubicchunks.cubicchunks.mixin"
-    defaultCompatibilityLevel = "JAVA_21"
+    defaultCompatibilityLevel = "JAVA_25"
     defaultMinVersion = "0.8"
 
     config(sourceSets.main, "core") {
@@ -157,14 +157,10 @@ base {
     archivesName = mod_id
 }
 
-java.toolchain.languageVersion = JavaLanguageVersion.of(21)
+java.toolchain.languageVersion = JavaLanguageVersion.of(25)
 
 neoForge {
     version = project.neo_version
-    parchment {
-        mappingsVersion = project.parchment_mappings_version
-        minecraftVersion = project.parchment_minecraft_version
-    }
     validateAccessTransformers = true
 
     runs {
@@ -206,18 +202,18 @@ neoForge {
 
         client {
             client()
-            systemProperty 'forge.enabledGameTestNamespaces', project.mod_id
+            systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
         }
 
         server {
             server()
-            systemProperty 'forge.enabledGameTestNamespaces', project.mod_id
+            systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
             programArgument '--nogui'
         }
 
         gameTestServer {
             type = "gameTestServer"
-            systemProperty 'forge.enabledGameTestNamespaces', project.mod_id
+            systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
         }
 
         clientData {
@@ -289,6 +285,8 @@ dependencies {
     testImplementation("org.junit.jupiter:junit-jupiter-params:5.10.0")
     testImplementation("org.mockito:mockito-core:5.2.0")
     testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.10.0")
+    // Gradle 9 no longer puts the JUnit Platform launcher on the test runtime classpath.
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher:1.10.0")
 
     testImplementation("org.hamcrest:hamcrest-junit:2.0.0.0")
     testImplementation("org.hamcrest:hamcrest:2.2")

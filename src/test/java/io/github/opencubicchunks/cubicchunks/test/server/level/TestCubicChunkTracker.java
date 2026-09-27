@@ -288,7 +288,7 @@ public class TestCubicChunkTracker extends BaseTest {
             for (int j = 0; j < srcPosClo.size(); j++) {
                 dist = Math.min(dist, Misc.chebyshevDistance(srcPosClo.get(j).chunkPos(), testPos));
             }
-            assertEquals(Math.min(7, dist), tracker.getLevel(testPos.toLong()), String.format("Level at chunk %d %d.", testPos.x, testPos.z));
+            assertEquals(Math.min(7, dist), tracker.getLevel(testPos.pack()), String.format("Level at chunk %d %d.", testPos.x(), testPos.z()));
         }
     }
 

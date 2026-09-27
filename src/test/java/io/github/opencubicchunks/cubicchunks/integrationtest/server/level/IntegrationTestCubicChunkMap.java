@@ -20,13 +20,13 @@ import io.github.opencubicchunks.cc_core.utils.Coords;
 import io.github.opencubicchunks.cc_core.world.level.CloPos;
 import io.github.opencubicchunks.cubicchunks.CanBeCubic;
 import io.github.opencubicchunks.cubicchunks.mixin.test.common.server.level.ChunkMapTestAccess;
+import io.github.opencubicchunks.cubicchunks.mixin.test.common.util.thread.BlockableEventLoopTestAccess;
 import io.github.opencubicchunks.cubicchunks.mixin.test.common.server.level.GenerationChunkHolderTestAccess;
 import io.github.opencubicchunks.cubicchunks.mixin.test.common.server.level.ServerChunkCacheTestAccess;
 import io.github.opencubicchunks.cubicchunks.server.level.CloHolder;
 import io.github.opencubicchunks.cubicchunks.server.level.CubeLevel;
 import io.github.opencubicchunks.cubicchunks.testutils.BaseTest;
 import io.github.opencubicchunks.cubicchunks.testutils.CloseableReference;
-import io.github.opencubicchunks.cubicchunks.testutils.DummyChunkProgressListener;
 import io.github.opencubicchunks.cubicchunks.world.level.cube.LevelCube;
 import it.unimi.dsi.fastutil.longs.Long2ObjectLinkedOpenHashMap;
 import net.minecraft.core.HolderGetter;
@@ -90,7 +90,7 @@ public class IntegrationTestCubicChunkMap extends BaseTest {
                 Runnable::run, flatLevelSource, 10, // server view distance
                 10, // simulation distance
                 false, // sync - not relevant for tests; false should be faster
-                new DummyChunkProgressListener(), (a, b) -> {}, mock(Mockito.RETURNS_DEEP_STUBS));
+                (a, b) -> {}, mock(Mockito.RETURNS_DEEP_STUBS));
         var f = serverLevelMock.getClass().getSuperclass().getDeclaredField("chunkSource");
         f.setAccessible(true);
         f.set(serverLevelMock, serverChunkCache);
@@ -116,7 +116,7 @@ public class IntegrationTestCubicChunkMap extends BaseTest {
 
             for (int x = -radius; x <= radius; x++) {
                 for (int z = -radius; z <= radius; z++) {
-                    var holder = ((ChunkMapTestAccess) chunkMap).invokeUpdateChunkScheduling(ChunkPos.asLong(x, z),
+                    var holder = ((ChunkMapTestAccess) chunkMap).invokeUpdateChunkScheduling(ChunkPos.pack(x, z),
                             centerLevel + Math.max(Math.abs(x), Math.abs(z)), null, ChunkLevel.MAX_LEVEL + 1);
                     ((GenerationChunkHolderTestAccess) holder).invokeUpdateHighestAllowedStatus(chunkMap);
                     if (x == 0 && z == 0) {
@@ -128,7 +128,7 @@ public class IntegrationTestCubicChunkMap extends BaseTest {
             var future = chunkMap.prepareAccessibleChunk(centerHolder);
 
             while (!(future.isDone() || future.isCompletedExceptionally())) {
-                ((ServerChunkCacheTestAccess) serverChunkCache).getMainThreadProcessor().pollTask();
+                ((BlockableEventLoopTestAccess) (Object) ((ServerChunkCacheTestAccess) serverChunkCache).getMainThreadProcessor()).invokePollTask();
             }
             var result = future.get();
             assertTrue(result.isSuccess(), () -> "Full chunk future ChunkResult should be successful, but was " + result.getError());
@@ -154,7 +154,7 @@ public class IntegrationTestCubicChunkMap extends BaseTest {
 
             for (int x = -radius; x <= radius; x++) {
                 for (int z = -radius; z <= radius; z++) {
-                    var holder = ((ChunkMapTestAccess) chunkMap).invokeUpdateChunkScheduling(ChunkPos.asLong(x, z),
+                    var holder = ((ChunkMapTestAccess) chunkMap).invokeUpdateChunkScheduling(ChunkPos.pack(x, z),
                             centerLevel + Math.max(Math.abs(x), Math.abs(z)), null, ChunkLevel.MAX_LEVEL + 1);
                     ((GenerationChunkHolderTestAccess) holder).invokeUpdateHighestAllowedStatus(chunkMap);
                     if (x == 0 && z == 0) {
@@ -166,7 +166,7 @@ public class IntegrationTestCubicChunkMap extends BaseTest {
             var future = chunkMap.prepareAccessibleChunk(centerHolder);
 
             while (!(future.isDone() || future.isCompletedExceptionally())) {
-                ((ServerChunkCacheTestAccess) serverChunkCache).getMainThreadProcessor().pollTask();
+                ((BlockableEventLoopTestAccess) (Object) ((ServerChunkCacheTestAccess) serverChunkCache).getMainThreadProcessor()).invokePollTask();
             }
             var result = future.get();
             assertTrue(result.isSuccess(), () -> "Full chunk future ChunkResult should be successful, but was " + result.getError());
@@ -222,7 +222,7 @@ public class IntegrationTestCubicChunkMap extends BaseTest {
             while (!(future.isDone() || future.isCompletedExceptionally())) {
                 assertChunkCubeLoadOrder(chunkMap, chunksByCubeColumn, cubes);
                 ServerChunkCache.MainThreadExecutor mainThreadProcessor = ((ServerChunkCacheTestAccess) serverChunkCache).getMainThreadProcessor();
-                mainThreadProcessor.pollTask();
+                ((BlockableEventLoopTestAccess) (Object) mainThreadProcessor).invokePollTask();
                 System.out.println(mainThreadProcessor.getPendingTasksCount());
             }
             var result = (ChunkResult<LevelCube>) (Object) future.get();
@@ -232,7 +232,7 @@ public class IntegrationTestCubicChunkMap extends BaseTest {
             assertInstanceOf(LevelCube.class, result.orElse(null));
             for (int sectionZ = 0; sectionZ < CubicConstants.DIAMETER_IN_SECTIONS; sectionZ++) {
                 for (int sectionX = 0; sectionX < CubicConstants.DIAMETER_IN_SECTIONS; sectionX++) {
-                    ChunkStatus status = chunkMap.getVisibleChunkIfPresent(ChunkPos.asLong(sectionX, sectionZ)).getPersistedStatus();
+                    ChunkStatus status = chunkMap.getVisibleChunkIfPresent(ChunkPos.pack(sectionX, sectionZ)).getPersistedStatus();
                     int finalSectionX = sectionX; // java why
                     int finalSectionZ = sectionZ;
                     assertTrue(status.isOrAfter(ChunkStatus.FULL), () -> "Chunks intersecting the center cube should be at full status, but "

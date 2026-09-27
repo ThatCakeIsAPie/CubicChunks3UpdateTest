@@ -13,20 +13,24 @@ import io.github.opencubicchunks.cubicchunks.world.level.cube.LevelCube;
 import io.github.opencubicchunks.cubicchunks.world.level.cube.ProtoCube;
 import io.github.opencubicchunks.cubicchunks.world.lighting.CubicLightEngine;
 import io.github.opencubicchunks.cubicchunks.world.lighting.CubicLightView;
+import net.minecraft.core.Holder;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.NbtUtils;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.biome.Biome;
+import net.minecraft.world.level.biome.Biomes;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunkSection;
 import net.minecraft.world.level.chunk.PalettedContainer;
+import net.minecraft.world.level.chunk.PalettedContainerFactory;
+import net.minecraft.world.level.chunk.Strategy;
 import net.minecraft.world.level.chunk.UpgradeData;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
 import net.minecraft.world.level.chunk.status.ChunkType;
@@ -43,8 +47,20 @@ import net.minecraft.world.ticks.ProtoChunkTicks;
  * {@code ImposterProtoChunk}.
  */
 public final class CubeSerializer {
-    private static final Codec<PalettedContainer<BlockState>> BLOCK_STATE_CODEC = PalettedContainer.codecRW(Block.BLOCK_STATE_REGISTRY,
-            BlockState.CODEC, PalettedContainer.Strategy.SECTION_STATES, Blocks.AIR.defaultBlockState());
+    private static final Strategy<BlockState> BLOCK_STATE_STRATEGY = Strategy.createForBlockStates(Block.BLOCK_STATE_REGISTRY);
+    private static final Codec<PalettedContainer<BlockState>> BLOCK_STATE_CODEC = PalettedContainer.codecRW(BlockState.CODEC, BLOCK_STATE_STRATEGY,
+            Blocks.AIR.defaultBlockState());
+
+    /**
+     * 26.1 builds chunk sections from a {@link PalettedContainerFactory} instead of a biome registry.
+     */
+    public static PalettedContainerFactory palettedFactory(Registry<Biome> biomeRegistry) {
+        BlockState air = Blocks.AIR.defaultBlockState();
+        Strategy<Holder<Biome>> biomeStrategy = Strategy.createForBiomes(biomeRegistry.asHolderIdMap());
+        Holder<Biome> defaultBiome = biomeRegistry.getOrThrow(Biomes.PLAINS);
+        return new PalettedContainerFactory(BLOCK_STATE_STRATEGY, air, BLOCK_STATE_CODEC, biomeStrategy, defaultBiome,
+                PalettedContainer.codecRO(biomeRegistry.holderByNameCodec(), biomeStrategy, defaultBiome));
+    }
 
     private CubeSerializer() {}
 
@@ -65,7 +81,7 @@ public final class CubeSerializer {
         tag.putInt("zPos", cubePos.getZ());
         tag.putBoolean("cc_cube", true);
         ChunkStatus status = cube.getPersistedStatus();
-        ResourceLocation statusKey = BuiltInRegistries.CHUNK_STATUS.getKey(status);
+        Identifier statusKey = BuiltInRegistries.CHUNK_STATUS.getKey(status);
         if (statusKey == null) {
             throw new IllegalStateException("Unregistered chunk status " + status);
         }
@@ -150,10 +166,8 @@ public final class CubeSerializer {
                 continue;
             }
             PalettedContainer<BlockState> states = sectionTag.read("block_states", BLOCK_STATE_CODEC)
-                    .orElseGet(() -> new PalettedContainer<>(Block.BLOCK_STATE_REGISTRY, Blocks.AIR.defaultBlockState(),
-                            PalettedContainer.Strategy.SECTION_STATES));
-            LevelChunkSection biomes = new LevelChunkSection(biomeRegistry);
-            sections[index] = new LevelChunkSection(states, biomes.getBiomes());
+                    .orElseGet(() -> new PalettedContainer<>(Blocks.AIR.defaultBlockState(), BLOCK_STATE_STRATEGY));
+            sections[index] = new LevelChunkSection(states, palettedFactory(biomeRegistry).createForBiomes());
         }
         return sections;
     }

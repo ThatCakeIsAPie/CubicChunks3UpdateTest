@@ -8,6 +8,21 @@ pluginManagement {
 }
 
 plugins {
-    id 'org.gradle.toolchains.foojay-resolver-convention' version '0.9.0'
+    id 'org.gradle.toolchains.foojay-resolver-convention' version '1.0.0'
 }
+
+// CubicChunksCore is the OpenCubicChunks submodule. Gradle 9 removed RepositoryHandler.jcenter().
+// This fork does not republish that submodule, so drop the call before the project is configured.
+def stripJcenter = { File buildFile ->
+    if (buildFile.isFile()) {
+        def original = buildFile.getText("UTF-8")
+        def stripped = original.replaceAll("(?m)^[ \\t]*jcenter\\(\\)[ \\t]*\\r?\\n", "")
+        if (!stripped.equals(original)) {
+            buildFile.setText(stripped, "UTF-8")
+        }
+    }
+}
+stripJcenter(file("CubicChunksCore/build.gradle"))
+stripJcenter(file("CubicChunksCore/buildSrc/build.gradle"))
+
 include ':CubicChunksCore'

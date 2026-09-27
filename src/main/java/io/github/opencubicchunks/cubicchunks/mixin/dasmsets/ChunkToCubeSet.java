@@ -78,13 +78,15 @@ public interface ChunkToCubeSet extends GlobalSet {
         @FieldRedirect("INVALID_CHUNK_POS:J")
         static final long INVALID_CUBE_POS = Long.MAX_VALUE;
 
-        @FieldToMethodRedirect("x:I")
+        // 26.1 ChunkPos is a record; x/z are accessors, not public fields.
+        @MethodRedirect("x()I")
         native int getX();
 
-        @FieldToMethodRedirect("z:I")
+        @MethodRedirect("z()I")
         native int getZ();
 
-        @MethodRedirect("toLong()J")
+        // 26.1: ChunkPos.toLong() was renamed to pack().
+        @MethodRedirect("pack()J")
         native long asLong();
 
         // Dummy methods that throw errors; these should be manually redirected to the correct x,y,z methods using mixin.
@@ -92,7 +94,8 @@ public interface ChunkToCubeSet extends GlobalSet {
         @ConstructorToFactoryRedirect("<init>(II)V")
         static native CubePos dummy_fromChunkCoords(int x, int z);
 
-        @MethodRedirect("asLong(II)J")
+        // 26.1: ChunkPos.asLong(int, int) was renamed to pack.
+        @MethodRedirect("pack(II)J")
         static native long dummy_chunkAsLong(int x, int z);
     }
 
