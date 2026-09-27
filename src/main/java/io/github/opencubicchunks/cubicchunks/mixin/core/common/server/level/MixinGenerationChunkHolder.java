@@ -119,7 +119,7 @@ public abstract class MixinGenerationChunkHolder implements GenerationCloHolder 
     public native @Nullable CubeAccess cc_getLatestCube();
 
     @AddMethodToSets(containers = ChunkToCloSet.GenerationChunkHolder_redirects.class, method = "getLatestChunk()Lnet/minecraft/world/level/chunk/ChunkAccess;")
-    public @Nullable CloAccess cc_getLatestClo() {
+    @Override public @Nullable CloAccess cc_getLatestClo() {
         if (cc_cubePos != null) {
             return cc_getLatestCube();
         }
