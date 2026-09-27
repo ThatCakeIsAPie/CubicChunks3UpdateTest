@@ -120,6 +120,14 @@ public class TestCubicLightEngine extends BaseTest {
         assertEquals(0, roof.cc_lightData().skyLight(block(roof, 0, top - 1, 0)), "far under the roof");
     }
 
+    @Test
+    public void solidStoneCubeStoresNoLight() {
+        ProtoCube cube = stoneCube(CubePos.of(0, -4, 0));
+        CubicLightEngine.relight(cube, CubicLightView.only(cube));
+        assertEquals(0, cube.cc_lightData().skyLight(block(cube, 0, 0, 0)));
+        assertEquals(0, cube.cc_lightData().blockLight(block(cube, 16, 16, 16)));
+    }
+
     /** Vanilla {@code BlockPos.asLong} keeps 12 bits of Y. Cubes outside that range must still light. */
     @Test
     public void lightOutsideVanillaPackedBlockY() {

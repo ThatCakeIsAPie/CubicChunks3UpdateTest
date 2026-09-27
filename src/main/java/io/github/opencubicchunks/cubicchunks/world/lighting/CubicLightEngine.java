@@ -52,6 +52,9 @@ public final class CubicLightEngine {
 
     /** Recompute {@code cube} from {@code view}. Does not walk neighbors. */
     public static void relight(CubeAccess cube, CubicLightView view) {
+        if (tryFastOpaqueCube(cube) || tryFastClearCube(cube, view)) {
+            return;
+        }
         LightVolume volume = new LightVolume(cube.cc_getCubePos());
         ArrayDeque<Long> blockQueue = new ArrayDeque<>();
         seedBlockLight(volume, view, blockQueue);
@@ -148,6 +151,102 @@ public final class CubicLightEngine {
         for (int y = cubeY - 1; y >= minY; y--) {
             cubes.add(CubePos.asLong(cubeX, y, cubeZ));
         }
+    }
+
+    /**
+     * A cube of full occluders with no emitters stores zeros. Sky and neighbor torches cannot enter.
+     */
+    private static boolean tryFastOpaqueCube(CubeAccess cube) {
+        if (!isFullyOpaque(cube)) {
+            return false;
+        }
+        cube.cc_lightData().clear();
+        return true;
+    }
+
+    private static boolean isFullyOpaque(CubeAccess cube) {
+        for (LevelChunkSection section : cube.getSections()) {
+            if (section.hasOnlyAir() || section.maybeHas(CubicLightEngine::admitsLight)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean admitsLight(BlockState state) {
+        return lightBlock(state) < MAX_LEVEL || emitsLight(state);
+    }
+
+    /**
+     * An all-air cube with a clear (or unloaded) sky and no nearby emitter is uniform sky. Building the flood volume for
+     * every such cube is what made a spawn-radius load stall.
+     */
+    private static boolean tryFastClearCube(CubeAccess cube, CubicLightView view) {
+        if (!isAllAir(cube) || hasNearbyEmitter(cube, view) || !skyAboveIsClear(cube, view)) {
+            return false;
+        }
+        cube.cc_lightData().fillSky(MAX_LEVEL);
+        return true;
+    }
+
+    private static boolean isAllAir(CubeAccess cube) {
+        for (LevelChunkSection section : cube.getSections()) {
+            if (!section.hasOnlyAir()) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean hasNearbyEmitter(CubeAccess cube, CubicLightView view) {
+        CubePos pos = cube.cc_getCubePos();
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dy = -1; dy <= 1; dy++) {
+                if (neighborEmits(view, pos, dx, dy)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private static boolean neighborEmits(CubicLightView view, CubePos pos, int dx, int dy) {
+        for (int dz = -1; dz <= 1; dz++) {
+            if (dx == 0 && dy == 0 && dz == 0) {
+                continue;
+            }
+            CubeAccess neighbor = view.cubeAt(pos.getX() + dx, pos.getY() + dy, pos.getZ() + dz);
+            if (neighbor != null && emitsAnywhere(neighbor)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean emitsAnywhere(CubeAccess cube) {
+        for (LevelChunkSection section : cube.getSections()) {
+            if (section.maybeHas(CubicLightEngine::emitsLight)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean skyAboveIsClear(CubeAccess cube, CubicLightView view) {
+        CubePos pos = cube.cc_getCubePos();
+        int y = pos.maxCubeY() + 1;
+        int end = y + SKY_SEARCH_BLOCKS - 1;
+        while (y <= end) {
+            CubeAccess above = view.cubeAt(pos.getX(), Coords.blockToCube(y), pos.getZ());
+            if (above == null) {
+                return true;
+            }
+            if (!isAllAir(above)) {
+                return false;
+            }
+            y = above.cc_getCubePos().maxCubeY() + 1;
+        }
+        return true;
     }
 
     private static void seedBlockLight(LightVolume volume, CubicLightView view, ArrayDeque<Long> queue) {

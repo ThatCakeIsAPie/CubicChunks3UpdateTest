@@ -5,6 +5,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.util.Arrays;
 
 import javax.annotation.Nullable;
 
@@ -25,6 +26,7 @@ public final class CubeLightData {
     private static final int Y_SHIFT = 8;
     private static final int Z_SHIFT = 4;
     private static final int NIBBLE_SHIFT = 2;
+    private static final int HIGH_NIBBLE_SHIFT = NIBBLE_SHIFT * 2;
     private static final int NIBBLE_MASK = 15;
     private static final int UNSIGNED_BYTE = 0xFF;
 
@@ -67,6 +69,20 @@ public final class CubeLightData {
         for (int i = 0; i < this.block.length; i++) {
             this.block[i] = null;
             this.sky[i] = null;
+        }
+    }
+
+    /** Every block in the cube gets this sky level, and block light is cleared. */
+    public void fillSky(int level) {
+        this.clear();
+        if (level == 0) {
+            return;
+        }
+        byte packed = (byte) ((level << HIGH_NIBBLE_SHIFT) | level);
+        byte[] layer = new byte[BYTES_PER_SECTION];
+        Arrays.fill(layer, packed);
+        for (int i = 0; i < this.sky.length; i++) {
+            this.sky[i] = layer.clone();
         }
     }
 
