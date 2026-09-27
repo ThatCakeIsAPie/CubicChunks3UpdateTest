@@ -7,6 +7,10 @@ import io.github.opencubicchunks.cc_core.api.CubePos;
  * Values outside the target cube are discarded after the flood.
  */
 final class LightVolume {
+    /** Local offsets inside a light volume fit in this many bits. A cube plus a 15-block margin is far smaller. */
+    private static final int COORD_SHIFT = 21;
+    private static final long COORD_MASK = (1L << COORD_SHIFT) - 1;
+
     final int minX;
     final int minY;
     final int minZ;
@@ -77,6 +81,26 @@ final class LightVolume {
 
     void setSky(int x, int y, int z, int value) {
         this.sky[this.index(x, y, z)] = (byte) value;
+    }
+
+    /**
+     * Queue key for a block inside this volume. Vanilla {@code BlockPos.asLong} keeps only 12 bits of Y, which wraps
+     * cubic worlds and indexes this array out of bounds.
+     */
+    long pack(int x, int y, int z) {
+        return ((long) (x - this.minX) << COORD_SHIFT * 2) | ((long) (y - this.minY) << COORD_SHIFT) | (z - this.minZ);
+    }
+
+    int unpackX(long packed) {
+        return this.minX + (int) (packed >>> COORD_SHIFT * 2);
+    }
+
+    int unpackY(long packed) {
+        return this.minY + (int) ((packed >>> COORD_SHIFT) & COORD_MASK);
+    }
+
+    int unpackZ(long packed) {
+        return this.minZ + (int) (packed & COORD_MASK);
     }
 
     private int index(int x, int y, int z) {

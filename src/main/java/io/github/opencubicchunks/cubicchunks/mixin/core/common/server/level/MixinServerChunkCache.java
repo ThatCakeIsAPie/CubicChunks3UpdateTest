@@ -214,9 +214,15 @@ public abstract class MixinServerChunkCache extends MixinChunkSource implements 
         return CubePos.of(pX, pY, pZ);
     }
 
-    // TODO (P2) - lighting; currently unused. can probably be done with dasm and @AddUnusedParam
-    public @Nullable LightChunk cc_getCubeForLighting(int pChunkX, int chunkY, int pChunkZ) {
-        throw new UnsupportedOperationException("not yet implemented");
+    /**
+     * Already-resident cube for lighting. Same contract as {@code getChunkForLighting}: no load, no wait.
+     */
+    @Override public @Nullable LightChunk cc_getCubeForLighting(int cubeX, int cubeY, int cubeZ) {
+        ChunkHolder holder = this.getVisibleChunkIfPresent(CloPos.cubeAsLong(cubeX, cubeY, cubeZ));
+        if (holder == null) {
+            return null;
+        }
+        return holder.getChunkIfPresentUnchecked(ChunkStatus.INITIALIZE_LIGHT.getParent());
     }
 
     @Inject(method = "tick", at = @At("HEAD"), cancellable = true)

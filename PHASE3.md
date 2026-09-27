@@ -6,7 +6,7 @@ Phase 3 scope: a cubic lighting MVP so caves are not a fullbright cheat. **Not**
 
 ## What works
 
-Block light is a 15-level flood stored on the cube. A torch in stone casts light; a block with `getLightBlock() == 15` stops it, including across a cube face when the neighbor is loaded. Spread subtracts `max(1, dest.getLightBlock())`. Emitters are seeded from `BlockState.getLightEmission()`. Empty sections are skipped via `LevelChunkSection.maybeHas`.
+Block light is a 15-level flood stored on the cube. The flood queue is packed relative to the cube, because vanilla `BlockPos.asLong` keeps only 12 bits of Y and wraps any cube outside that range. A torch in stone casts light; a block with `getLightBlock() == 15` stops it, including across a cube face when the neighbor is loaded. Spread subtracts `max(1, dest.getLightBlock())`. Emitters are seeded from `BlockState.getLightEmission()`. Empty sections are skipped via `LevelChunkSection.maybeHas`.
 
 Sky light is a documented heuristic (below), stored in the same nibble arrays. `getRawBrightness` is `max(block, sky - amount)`. `getLayerListener` returns those nibbles as vanilla `DataLayer`s (index `(y << 8) | (z << 4) | x`, low nibble first). `lightOnInColumn` stays true so vanilla does not treat the column as unlit.
 
@@ -24,7 +24,7 @@ Neighbor refresh at generation is one shot and non-recursive: the four orthogona
 
 Vanilla sky light walks an infinite column and a surface tracker. This MVP does not.
 
-Direct sun is level 15 in blocks whose `getLightBlock()` is 0 when the path upward is clear. The search is `CubicLightEngine.SKY_SEARCH_BLOCKS` (128). Unloaded space **on the cube's own columns** counts as open sky, so a ceiling that is not loaded, or is more than 128 blocks away, does not cast a shadow. Partial occluders (`getLightBlock()` 1–14, leaves and water) stop direct sun; the flood fills the rest. Only full opacity (≥ 15) blocks block light completely.
+Direct sun is level 15 in blocks whose `getLightBlock()` is 0 when the path upward is clear. Cells that are already at that level are not flooded again, so an open cube does not walk every neighbor of every block. The search is `CubicLightEngine.SKY_SEARCH_BLOCKS` (128). Unloaded space **on the cube's own columns** counts as open sky, so a ceiling that is not loaded, or is more than 128 blocks away, does not cast a shadow. Partial occluders (`getLightBlock()` 1–14, leaves and water) stop direct sun; the flood fills the rest. Only full opacity (≥ 15) blocks block light completely.
 
 Margin columns (the 15-block halo used so a torch on a cube face reaches the neighbor) do **not** invent sun from unloaded space. They copy a neighbor's stored sky only when that neighbor is already `isLightCorrect()`.
 

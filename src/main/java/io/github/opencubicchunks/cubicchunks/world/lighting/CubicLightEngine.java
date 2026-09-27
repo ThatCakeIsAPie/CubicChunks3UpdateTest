@@ -56,8 +56,9 @@ public final class CubicLightEngine {
         ArrayDeque<Long> blockQueue = new ArrayDeque<>();
         seedBlockLight(volume, view, blockQueue);
         propagate(volume, view, blockQueue, false);
+        fillSky(volume, view);
         ArrayDeque<Long> skyQueue = new ArrayDeque<>();
-        fillSky(volume, view, skyQueue);
+        enqueueSkySources(volume, view, skyQueue);
         propagate(volume, view, skyQueue, true);
         writeCube(volume, cube);
     }
@@ -204,30 +205,29 @@ public final class CubicLightEngine {
             return;
         }
         volume.setBlock(x, y, z, emission);
-        queue.add(BlockPos.asLong(x, y, z));
+        queue.add(volume.pack(x, y, z));
     }
 
-    private static void fillSky(LightVolume volume, CubicLightView view, ArrayDeque<Long> queue) {
+    private static void fillSky(LightVolume volume, CubicLightView view) {
         BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
         for (int x = volume.minX; x <= volume.minX + volume.size - 1; x++) {
             for (int z = volume.minZ; z <= volume.minZ + volume.size - 1; z++) {
-                fillSkyColumn(volume, view, pos, queue, x, z);
+                fillSkyColumn(volume, view, pos, x, z);
             }
         }
     }
 
-    private static void fillSkyColumn(LightVolume volume, CubicLightView view, BlockPos.MutableBlockPos pos, ArrayDeque<Long> queue, int x, int z) {
+    private static void fillSkyColumn(LightVolume volume, CubicLightView view, BlockPos.MutableBlockPos pos, int x, int z) {
         boolean ownColumn = volume.inTargetColumn(x, z);
         // Margin columns do not invent sun from unloaded space; they import a neighbor's stored sky instead.
         boolean sun = ownColumn && seesSky(view, pos, x, volume.maxY(), z);
         for (int y = volume.maxY(); y >= volume.minY(); y--) {
-            sun = applySkyCell(volume, view, pos, queue, x, y, z, ownColumn, sun);
+            sun = applySkyCell(volume, view, pos, x, y, z, ownColumn, sun);
         }
     }
 
     private static boolean applySkyCell(
-            LightVolume volume, CubicLightView view, BlockPos.MutableBlockPos pos, ArrayDeque<Long> queue, int x, int y, int z, boolean ownColumn,
-            boolean sun
+            LightVolume volume, CubicLightView view, BlockPos.MutableBlockPos pos, int x, int y, int z, boolean ownColumn, boolean sun
     ) {
         BlockState state = stateAt(view, pos, x, y, z);
         if (state == null) {
@@ -235,14 +235,13 @@ public final class CubicLightEngine {
         }
         if (sun && lightBlock(state) == 0) {
             volume.setSky(x, y, z, MAX_LEVEL);
-            queue.add(BlockPos.asLong(x, y, z));
             return true;
         }
-        seedStoredSky(volume, view, queue, x, y, z, ownColumn);
+        seedStoredSky(volume, view, x, y, z, ownColumn);
         return false;
     }
 
-    private static void seedStoredSky(LightVolume volume, CubicLightView view, ArrayDeque<Long> queue, int x, int y, int z, boolean ownColumn) {
+    private static void seedStoredSky(LightVolume volume, CubicLightView view, int x, int y, int z, boolean ownColumn) {
         if (ownColumn) {
             return;
         }
@@ -251,7 +250,47 @@ public final class CubicLightEngine {
             return;
         }
         volume.setSky(x, y, z, stored);
-        queue.add(BlockPos.asLong(x, y, z));
+    }
+
+    /** Queue only cells that can still raise a neighbor. A fully lit open cube then does not flood every block. */
+    private static void enqueueSkySources(LightVolume volume, CubicLightView view, ArrayDeque<Long> queue) {
+        BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
+        int maxX = volume.minX + volume.size - 1;
+        int maxY = volume.maxY();
+        int maxZ = volume.minZ + volume.size - 1;
+        for (int x = volume.minX; x <= maxX; x++) {
+            for (int y = volume.minY(); y <= maxY; y++) {
+                enqueueSkyRow(volume, view, pos, queue, x, y, maxZ);
+            }
+        }
+    }
+
+    private static void enqueueSkyRow(
+            LightVolume volume, CubicLightView view, BlockPos.MutableBlockPos pos, ArrayDeque<Long> queue, int x, int y, int maxZ
+    ) {
+        for (int z = volume.minZ; z <= maxZ; z++) {
+            int level = volume.getSky(x, y, z);
+            if (level > MIN_SPREAD && canSpreadSky(volume, view, pos, x, y, z, level)) {
+                queue.add(volume.pack(x, y, z));
+            }
+        }
+    }
+
+    private static boolean canSpreadSky(LightVolume volume, CubicLightView view, BlockPos.MutableBlockPos pos, int x, int y, int z, int level) {
+        return spreadsSkyInto(volume, view, pos, x + 1, y, z, level) || spreadsSkyInto(volume, view, pos, x - 1, y, z, level)
+                || spreadsSkyInto(volume, view, pos, x, y + 1, z, level) || spreadsSkyInto(volume, view, pos, x, y - 1, z, level)
+                || spreadsSkyInto(volume, view, pos, x, y, z + 1, level) || spreadsSkyInto(volume, view, pos, x, y, z - 1, level);
+    }
+
+    private static boolean spreadsSkyInto(LightVolume volume, CubicLightView view, BlockPos.MutableBlockPos pos, int x, int y, int z, int level) {
+        if (!volume.contains(x, y, z) || volume.getSky(x, y, z) >= level - MIN_SPREAD) {
+            return false;
+        }
+        BlockState state = stateAt(view, pos, x, y, z);
+        if (state == null) {
+            return false;
+        }
+        return level - Math.max(MIN_SPREAD, lightBlock(state)) > volume.getSky(x, y, z);
     }
 
     private static boolean seesSky(CubicLightView view, BlockPos.MutableBlockPos pos, int x, int y, int z) {
@@ -283,7 +322,7 @@ public final class CubicLightEngine {
         BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
         while (!queue.isEmpty()) {
             long packed = queue.removeFirst();
-            spreadFrom(volume, view, pos, queue, BlockPos.getX(packed), BlockPos.getY(packed), BlockPos.getZ(packed), sky);
+            spreadFrom(volume, view, pos, queue, volume.unpackX(packed), volume.unpackY(packed), volume.unpackZ(packed), sky);
         }
     }
 
@@ -322,7 +361,7 @@ public final class CubicLightEngine {
         } else {
             volume.setBlock(x, y, z, spread);
         }
-        queue.add(BlockPos.asLong(x, y, z));
+        queue.add(volume.pack(x, y, z));
     }
 
     private static void writeCube(LightVolume volume, CubeAccess cube) {

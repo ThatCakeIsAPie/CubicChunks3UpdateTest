@@ -120,6 +120,19 @@ public class TestCubicLightEngine extends BaseTest {
         assertEquals(0, roof.cc_lightData().skyLight(block(roof, 0, top - 1, 0)), "far under the roof");
     }
 
+    /** Vanilla {@code BlockPos.asLong} keeps 12 bits of Y. Cubes outside that range must still light. */
+    @Test
+    public void lightOutsideVanillaPackedBlockY() {
+        ProtoCube high = airCube(CubePos.of(5, 1273, -123));
+        CubicLightEngine.relight(high, CubicLightView.only(high));
+        assertEquals(CubicLightEngine.MAX_LEVEL, high.cc_lightData().skyLight(block(high, 1, 1, 1)));
+
+        ProtoCube low = airCube(CubePos.of(0, -80, 0));
+        set(low, 4, 4, 4, TORCH);
+        CubicLightEngine.relight(low, CubicLightView.only(low));
+        assertEquals(TORCH.getLightEmission(), low.cc_lightData().blockLight(block(low, 4, 4, 4)));
+    }
+
     @Test
     public void loadedStoneAboveBlocksSkyThatUnloadedSpaceWouldLeaveOpen() {
         ProtoCube below = airCube(CubePos.of(0, 0, 0));
