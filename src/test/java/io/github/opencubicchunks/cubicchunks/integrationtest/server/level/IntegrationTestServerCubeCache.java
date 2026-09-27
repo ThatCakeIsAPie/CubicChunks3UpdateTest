@@ -14,6 +14,7 @@ import static org.mockito.Mockito.withSettings;
 
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Stream;
 
@@ -64,6 +65,11 @@ public class IntegrationTestServerCubeCache extends BaseTest {
 
     private CloseableReference<ServerChunkCache> createServerChunkCache(boolean vanillaTest)
             throws IOException, NoSuchFieldException, IllegalAccessException {
+        return createServerChunkCache(vanillaTest, Files.createTempDirectory("cc_test"));
+    }
+
+    private CloseableReference<ServerChunkCache> createServerChunkCache(boolean vanillaTest, Path dimensionPath)
+            throws IOException, NoSuchFieldException, IllegalAccessException {
         // Worldgen internals
         var randomStateMockedStatic = Mockito.mockStatic(RandomState.class, withSettings().defaultAnswer(Answers.RETURNS_DEEP_STUBS));
         NoiseBasedChunkGenerator noiseBasedChunkGeneratorMock = mock();
@@ -91,7 +97,7 @@ public class IntegrationTestServerCubeCache extends BaseTest {
         when(serverLevelMock.getSectionsCount()).thenReturn(24);
         // We seem to need an actual directory, not a mock
         LevelStorageSource.LevelStorageAccess levelStorageAccessMock = mock(Mockito.RETURNS_DEEP_STUBS);
-        when(levelStorageAccessMock.getDimensionPath(any())).thenReturn(Files.createTempDirectory("cc_test"));
+        when(levelStorageAccessMock.getDimensionPath(any())).thenReturn(dimensionPath);
         var serverChunkCache = new ServerChunkCache(serverLevelMock, levelStorageAccessMock, mock(Mockito.RETURNS_DEEP_STUBS),
                 mock(Mockito.RETURNS_DEEP_STUBS),
                 // We run everything on the main thread as Mockito has race conditions when multiple threads call into it
@@ -427,6 +433,43 @@ public class IntegrationTestServerCubeCache extends BaseTest {
             assertEquals(Blocks.AIR.defaultBlockState(), cubeAccess.getBlockState(aboveSurface));
             assertEquals(Blocks.SMOOTH_STONE.defaultBlockState(), cubeAccess.getBlockState(columnFloor));
             assertEquals(Blocks.AIR.defaultBlockState(), cubeAccess.getBlockState(airColumn));
+        }
+    }
+
+    /**
+     * A block that generation would leave as air must still be there after {@link ServerChunkCache#save} and a new cache on the same directory.
+     * The neighboring generated stone block must still be stone, so the reload is the saved cube and not a fresh fill of an empty file.
+     */
+    @Test
+    public void cubeBlocksSurviveSaveAndReload() throws Exception {
+        Path dimensionPath = Files.createTempDirectory("cc_cube_save");
+        // (31, 21, 31) is air above the sinusoid, in the same section as generated stone at (31, 20, 31).
+        BlockPos placed = new BlockPos(31, 21, 31);
+        BlockPos generated = new BlockPos(31, 20, 31);
+        try (var firstRef = createServerChunkCache(false, dimensionPath)) {
+            ServerChunkCache cache = firstRef.value();
+            try {
+                var cube = ((ServerCubeCache) cache).cc_getCube(0, 0, 0, ChunkStatus.FULL, true);
+                assertInstanceOf(LevelCube.class, cube);
+                assertEquals(Blocks.AIR.defaultBlockState(), cube.getBlockState(placed));
+                assertEquals(Blocks.SMOOTH_STONE.defaultBlockState(), cube.getBlockState(generated));
+                cube.setBlockState(placed, Blocks.DIAMOND_BLOCK.defaultBlockState(), 0);
+                assertEquals(Blocks.DIAMOND_BLOCK.defaultBlockState(), cube.getBlockState(placed));
+                cache.save(true);
+            } finally {
+                cache.chunkMap.close();
+            }
+        }
+        try (var secondRef = createServerChunkCache(false, dimensionPath)) {
+            ServerChunkCache cache = secondRef.value();
+            try {
+                var cube = ((ServerCubeCache) cache).cc_getCube(0, 0, 0, ChunkStatus.FULL, true);
+                assertInstanceOf(LevelCube.class, cube);
+                assertEquals(Blocks.DIAMOND_BLOCK.defaultBlockState(), cube.getBlockState(placed));
+                assertEquals(Blocks.SMOOTH_STONE.defaultBlockState(), cube.getBlockState(generated));
+            } finally {
+                cache.chunkMap.close();
+            }
         }
     }
 
