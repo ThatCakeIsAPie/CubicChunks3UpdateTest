@@ -92,21 +92,23 @@ public class ProtoCube extends CubeAccess implements ProtoClo {
     @Override public native FluidState getFluidState(BlockPos pos);
 
     @Override public @Nullable BlockState setBlockState(BlockPos pos, BlockState state, int flags) {
-        int x = pos.getX();
-        int y = pos.getY();
-        int z = pos.getZ();
-        LevelChunkSection section = this.getSection(Coords.blockToIndex(pos));
-        boolean emptySection = section.hasOnlyAir();
-        if (emptySection && state.is(Blocks.AIR)) {
-            return state;
-        } else {
-            int sectionLocalX = SectionPos.sectionRelative(x);
-            int sectionLocalY = SectionPos.sectionRelative(y);
-            int sectionLocalZ = SectionPos.sectionRelative(z);
-            BlockState blockstate = section.setBlockState(sectionLocalX, sectionLocalY, sectionLocalZ, state);
-            // TODO (P2) lighting and heightmaps - see vanilla method - might be dasm-able once we do?
+        synchronized (this.cc_blockMonitor) {
+            int x = pos.getX();
+            int y = pos.getY();
+            int z = pos.getZ();
+            LevelChunkSection section = this.getSection(Coords.blockToIndex(pos));
+            boolean emptySection = section.hasOnlyAir();
+            if (emptySection && state.is(Blocks.AIR)) {
+                return state;
+            } else {
+                int sectionLocalX = SectionPos.sectionRelative(x);
+                int sectionLocalY = SectionPos.sectionRelative(y);
+                int sectionLocalZ = SectionPos.sectionRelative(z);
+                BlockState blockstate = section.setBlockState(sectionLocalX, sectionLocalY, sectionLocalZ, state);
+                // TODO (P2) lighting and heightmaps - see vanilla method - might be dasm-able once we do?
 
-            return blockstate;
+                return blockstate;
+            }
         }
     }
 

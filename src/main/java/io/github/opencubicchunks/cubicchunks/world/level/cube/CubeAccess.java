@@ -79,6 +79,11 @@ public abstract class CubeAccess implements CloAccess {
     protected final LevelHeightAccessor levelHeightAccessor;
     protected final LevelChunkSection[] sections;
     private final CubeLightData cc_lightData;
+    /**
+     * Serializes section palette writes with a save or a packet snapshot of the same cube. The dedicated server still
+     * runs player edits on one thread; this is the guard for a second thread that reaches the same cube anyway.
+     */
+    protected final Object cc_blockMonitor = new Object();
 
     // Constructor signature matches ChunkAccess for DASM redirect purposes
     public CubeAccess(
@@ -108,6 +113,18 @@ public abstract class CubeAccess implements CloAccess {
 
     public CubeLightData cc_lightData() {
         return this.cc_lightData;
+    }
+
+    public void cc_runWithBlockLock(Runnable action) {
+        synchronized (this.cc_blockMonitor) {
+            action.run();
+        }
+    }
+
+    public <T> T cc_callWithBlockLock(Supplier<T> action) {
+        synchronized (this.cc_blockMonitor) {
+            return action.get();
+        }
     }
 
     private static void replaceMissingSections(Registry<Biome> biomeRegistry, LevelChunkSection[] sections) {
