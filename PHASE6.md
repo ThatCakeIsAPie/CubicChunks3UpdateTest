@@ -85,10 +85,28 @@ What the compile fixes actually changed:
 - DASM: `ChunkPos.toLong()` / `asLong(int,int)` / `new ChunkPos(long)` redirects now name `pack()` / `pack(int,int)` / `unpack(long)`. Record accessors `x()` / `z()` redirect to `getX()` / `getZ()`. `ProtoChunk` constructor redirects take `PalettedContainerFactory`.
 - Tests: `TicketType.START` → `TicketType.FORCED` (no `START` constant). `BlockableEventLoop` takes `(name, propagatesCrashes)` and still needs `wrapRunnable`. `pollTask()` is protected, invoked through a test mixin. `IntegratedServer`’s constructor matches 26.1. `TestLevel` implements the new `Level` / `CollisionGetter` abstracts (`environmentAttributes`, `clockManager`, respawn data, `getWorldBorder`).
 
-`./gradlew test` is recorded at the bottom of this file after it runs.
+## `./gradlew test`
+
+Does not reach test cases. After the JUnit launcher fix, the worker dies while FML is bootstrapping mixins:
+
+```
+java.lang.IllegalArgumentException: object of type net.neoforged.fml.loading.mixin.FMLMixinService
+    is not an instance of org.spongepowered.asm.service.modlauncher.MixinServiceModLauncher
+    at io.github.notstirred.dasm.mod.BaseConfigPlugin.reflectIntoDummyTargets(BaseConfigPlugin.java:97)
+    at io.github.notstirred.dasm.mod.BaseConfigPlugin.shouldApplyMixin(BaseConfigPlugin.java:64)
+```
+
+DASM **3.2.0** (newest on NeoForge Maven, published 2025-12-14) still reflects into ModLauncher’s `MixinServiceModLauncher`. NeoForge 26.1 / FML 11 uses `FMLMixinService` and no longer has that class. The DASM config plugin aborts, so `TransformFromMethod` bodies such as `LevelCube.getBlockState` stay native. The follow-up mixin then fails closed:
+
+```
+Critical injection failure: Redirector cc_onGetBlockState_SectionIndex ... failed injection check, (0/1) succeeded. Scanned 0 target(s).
+MixinLevelCube from cubicchunks.mixins.core.json
+```
+
+That is a DASM/FML 11 incompatibility, not a ChunkPos rename. There is no newer `dasm` or `dasm-neoforge` artifact to bump to. Phase 6b needs a DASM release that targets FML 11 before cube method transforms or the tests that load them can run.
 
 ## Next rung
 
-- **6b** — still on 26.1, no Vulkan. Restore the cube loading-screen volume (needs a cube status store; `ChunkLoadStatusView` is columns only), reattach spawn-area sizing now that `prepareLevels` uses `ChunkLoadCounter`, and retarget player spawn tickets from the deleted `setDefaultSpawnPos` onto `PrepareSpawnTask` (`TicketType.PLAYER_SPAWN`). Confirm DASM transforms apply at runtime.
+- **6b** — still on 26.1, no Vulkan. First: a DASM build that does not cast the mixin service to `MixinServiceModLauncher` (FML 11’s service is `FMLMixinService`). Until that exists, `TransformFromMethod` bodies stay native and redirects such as `MixinLevelCube` fail at startup. After DASM applies again: restore the cube loading-screen volume (`ChunkLoadStatusView` is columns only), reattach spawn-area sizing now that `prepareLevels` uses `ChunkLoadCounter`, and retarget player spawn tickets from the deleted `setDefaultSpawnPos` onto `PrepareSpawnTask` (`TicketType.PLAYER_SPAWN`).
 - **6c** — NeoForge **26.2.x** (newest stable at research time: `26.2.0.88`) using the 26.2 primer. Render and Vulkan changes stay human-owned; an agent should only bump the pin and apply mechanical renames the primer lists outside the renderer.
 - **After 6c** — NeoForge **26.3.x** once it leaves beta (newest at research time: `26.3.0.23-beta`). Not a target of 6a.
