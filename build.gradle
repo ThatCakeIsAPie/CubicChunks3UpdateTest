@@ -285,6 +285,8 @@ dependencies {
     testImplementation("org.junit.jupiter:junit-jupiter-params:5.10.0")
     testImplementation("org.mockito:mockito-core:5.2.0")
     testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.10.0")
+    // Gradle 9 no longer puts the JUnit Platform launcher on the test runtime classpath.
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher:1.10.0")
 
     testImplementation("org.hamcrest:hamcrest-junit:2.0.0.0")
     testImplementation("org.hamcrest:hamcrest:2.2")

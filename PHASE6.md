@@ -45,6 +45,7 @@ Jumping those 1.21.x notes into one 26.1 compile is the largest single bump the 
 | Foojay resolver | 0.9.0 | **1.0.0** |
 | Java toolchain | 21 | **25** |
 | Mixin compat level | `JAVA_21` | **`JAVA_25`** |
+| JUnit Platform launcher | pulled in by Gradle 8 | **`junit-platform-launcher:1.10.0`** on `testRuntimeOnly` (Gradle 9 dropped the implicit launcher) |
 | Game test property | `forge.enabledGameTestNamespaces` | **`neoforge.enabledGameTestNamespaces`** (26.1 MDK) |
 | GitHub Actions JDK | 21 | **25** |
 | DASM | dasm + dasm-neoforge **3.2.0** | unchanged (newest on NeoForge Maven, published 2025-12-14) |
