@@ -12,6 +12,7 @@ import io.github.opencubicchunks.cubicchunks.client.multiplayer.ClientCubeCache;
 import io.github.opencubicchunks.cubicchunks.client.renderer.CubicLevelRenderer;
 import io.github.opencubicchunks.cubicchunks.world.level.cube.CubeSource;
 import io.github.opencubicchunks.cubicchunks.world.level.cube.LevelCube;
+import io.github.opencubicchunks.cubicchunks.world.lighting.CubeLightPacketData;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.network.FriendlyByteBuf;
@@ -24,21 +25,23 @@ import net.minecraft.world.level.levelgen.Heightmap;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 import net.neoforged.neoforge.network.handling.IPayloadHandler;
 
-// TODO (P2) the name is currently a lie; no light data :)
-public record CCClientboundLevelCubeWithLightPacket(CubePos pos, CCClientboundLevelCubePacketData cubeData) implements CustomPacketPayload {
+public record CCClientboundLevelCubeWithLightPacket(CubePos pos, CCClientboundLevelCubePacketData cubeData, CubeLightPacketData light)
+        implements CustomPacketPayload {
+
     public static final Type<CCClientboundLevelCubeWithLightPacket> TYPE = new Type<>(
             ResourceLocation.fromNamespaceAndPath(CubicChunks.MODID, "level_cube_with_light"));
 
     public static final StreamCodec<FriendlyByteBuf, CCClientboundLevelCubeWithLightPacket> STREAM_CODEC = StreamCodec.composite(
             CUBE_POS_STREAM_CODEC, CCClientboundLevelCubeWithLightPacket::pos, CCClientboundLevelCubePacketData.STREAM_CODEC,
-            CCClientboundLevelCubeWithLightPacket::cubeData, CCClientboundLevelCubeWithLightPacket::new);
+            CCClientboundLevelCubeWithLightPacket::cubeData, CubeLightPacketData.STREAM_CODEC, CCClientboundLevelCubeWithLightPacket::light,
+            CCClientboundLevelCubeWithLightPacket::new);
 
     @Override public Type<? extends CustomPacketPayload> type() {
         return TYPE;
     }
 
     public CCClientboundLevelCubeWithLightPacket(LevelCube cube) {
-        this(cube.cc_getCloPos().cubePos(), new CCClientboundLevelCubePacketData(cube));
+        this(cube.cc_getCloPos().cubePos(), new CCClientboundLevelCubePacketData(cube), CubeLightPacketData.from(cube));
     }
 
     public static class Handler implements IPayloadHandler<CCClientboundLevelCubeWithLightPacket> {
@@ -56,16 +59,15 @@ public record CCClientboundLevelCubeWithLightPacket(CubePos pos, CCClientboundLe
             // TODO P2 :: No block entity tags consumer
             Consumer<ClientboundLevelChunkPacketData.BlockEntityTagOutput> entityTagConsumer = (a) -> {};
 
-            ((ClientCubeCache) (level.getChunkSource())).cc_replaceWithPacketData(x, y, z, payload.cubeData.getReadBuffer(), heightmaps,
-                    entityTagConsumer);
+            LevelCube levelCube = ((ClientCubeCache) (level.getChunkSource())).cc_replaceWithPacketData(x, y, z, payload.cubeData.getReadBuffer(),
+                    heightmaps, entityTagConsumer);
+            if (levelCube != null) {
+                payload.light().apply(levelCube);
+            }
 
-            // TODO P2 :: Vanilla does light updates at this point
-//            ClientboundLightUpdatePacketData clientboundlightupdatepacketdata = payload.getLightData();
             ((ClientLevel) level).queueLightUpdate(() -> {
-//                this.applyLightData(i, j, clientboundlightupdatepacketdata, false);
-                LevelCube levelCube = ((CubeSource) level.getChunkSource()).cc_getCube(x, y, z, false);
-                if (levelCube != null) {
-//                    this.enableChunkLight(levelCube, i, j);
+                LevelCube ready = ((CubeSource) level.getChunkSource()).cc_getCube(x, y, z, false);
+                if (ready != null) {
                     ((CubicLevelRenderer) Minecraft.getInstance().levelRenderer).cc_onCubeReadyToRender(payload.pos);
                 }
             });

@@ -11,6 +11,8 @@ import io.github.opencubicchunks.cubicchunks.world.level.cube.CubeAccess;
 import io.github.opencubicchunks.cubicchunks.world.level.cube.ImposterProtoCube;
 import io.github.opencubicchunks.cubicchunks.world.level.cube.LevelCube;
 import io.github.opencubicchunks.cubicchunks.world.level.cube.ProtoCube;
+import io.github.opencubicchunks.cubicchunks.world.lighting.CubicLightEngine;
+import io.github.opencubicchunks.cubicchunks.world.lighting.CubicLightView;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
@@ -34,8 +36,9 @@ import net.minecraft.world.ticks.ProtoChunkTicks;
 /**
  * Block-state persistence for cubes.
  * <p>
- * This is intentionally narrower than {@code SerializableChunkData}: lighting, heightmaps, biomes, block entities, ticks, structures, and POI are
- * not written. {@link CubeAccess#getHeightmaps()} throws, so cubes must not go through the vanilla chunk serializer.
+ * This is intentionally narrower than {@code SerializableChunkData}: heightmaps, biomes, block entities, ticks, structures, and POI are not
+ * written. Block and sky nibbles are stored under {@code cc_light} so a reload does not have to guess them. {@link CubeAccess#getHeightmaps()}
+ * throws, so cubes must not go through the vanilla chunk serializer.
  * A full cube is returned as an {@link ImposterProtoCube} so the cube {@code full()} step can unwrap it the same way vanilla unwraps
  * {@code ImposterProtoChunk}.
  */
@@ -74,6 +77,7 @@ public final class CubeSerializer {
             sectionsTag.add(sectionTag);
         }
         tag.put("sections", sectionsTag);
+        tag.putByteArray("cc_light", cube.cc_lightData().writePacked());
         return tag;
     }
 
@@ -94,6 +98,7 @@ public final class CubeSerializer {
         if (status.getChunkType() == ChunkType.LEVELCHUNK) {
             LevelCube levelCube = new LevelCube(level, cubePos, UpgradeData.EMPTY, new LevelChunkTicks<>(), new LevelChunkTicks<>(), inhabitedTime,
                     sections, null, null);
+            readLight(levelCube, tag, true);
             return new ImposterProtoCube(levelCube, false);
         }
 
@@ -101,7 +106,24 @@ public final class CubeSerializer {
                 biomeRegistry, null);
         protoCube.setInhabitedTime(inhabitedTime);
         protoCube.setPersistedStatus(status);
+        readLight(protoCube, tag, false);
         return protoCube;
+    }
+
+    /**
+     * Full cubes skip the light status on reload, so missing light is recomputed from this cube alone (unloaded neighbors count as open sky).
+     */
+    private static void readLight(CubeAccess cube, CompoundTag tag, boolean relightIfMissing) {
+        tag.getByteArray("cc_light").ifPresent(bytes -> {
+            if (bytes.length > 0) {
+                cube.cc_lightData().readPacked(bytes);
+                cube.setLightCorrect(true);
+            }
+        });
+        if (relightIfMissing && !cube.isLightCorrect()) {
+            CubicLightEngine.relight(cube, CubicLightView.only(cube));
+            cube.setLightCorrect(true);
+        }
     }
 
     private static LevelChunkSection[] readSections(CompoundTag tag, Registry<Biome> biomeRegistry) {

@@ -15,6 +15,8 @@ import io.github.opencubicchunks.cubicchunks.mixin.dasmsets.ChunkToCubeSet;
 import io.github.opencubicchunks.cubicchunks.util.StaticCache3D;
 import io.github.opencubicchunks.cubicchunks.world.level.chunk.status.CCChunkStatusTasks;
 import io.github.opencubicchunks.cubicchunks.world.level.cube.CubeAccess;
+import io.github.opencubicchunks.cubicchunks.world.lighting.CubicLightEngine;
+import io.github.opencubicchunks.cubicchunks.world.lighting.GenerationCubicLightView;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.GenerationChunkHolder;
 import net.minecraft.server.level.ServerLevel;
@@ -147,7 +149,8 @@ public class CubeStatusTasks {
     public static CompletableFuture<CubeAccess> light(
             WorldGenContext worldGenContext, CubeStep step, StaticCache3D<GenerationChunkHolder> cache, CubeAccess cube
     ) {
-        return passThrough(worldGenContext, step, cache, cube);
+        CubicLightEngine.lightCube(cube, new GenerationCubicLightView(cube, cache));
+        return CompletableFuture.completedFuture(cube);
     }
 
     @AddMethodToSets(containers = ChunkToCubeSet.ChunkStatusTasks_to_CubeStatusTasks_redirects.class, method = "generateSpawn(Lnet/minecraft/world/level/chunk/status/WorldGenContext;Lnet/minecraft/world/level/chunk/status/ChunkStep;"

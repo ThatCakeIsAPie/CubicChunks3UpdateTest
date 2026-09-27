@@ -26,9 +26,12 @@ import io.github.opencubicchunks.cubicchunks.mixin.core.common.world.level.chunk
 import io.github.opencubicchunks.cubicchunks.mixin.dasmsets.ChunkToCloSet;
 import io.github.opencubicchunks.cubicchunks.mixin.dasmsets.ChunkToCubeSet;
 import io.github.opencubicchunks.cubicchunks.mixin.dasmsets.GlobalSet;
+import io.github.opencubicchunks.cubicchunks.server.level.GenerationCloHolder;
 import io.github.opencubicchunks.cubicchunks.server.level.ServerCubeCache;
+import io.github.opencubicchunks.cubicchunks.world.level.chunklike.CloAccess;
 import io.github.opencubicchunks.cubicchunks.world.level.chunklike.LevelClo;
 import io.github.opencubicchunks.cubicchunks.world.level.cube.CubeAccess;
+import io.github.opencubicchunks.cubicchunks.world.level.cube.ImposterProtoCube;
 import io.github.opencubicchunks.cubicchunks.world.level.cube.LevelCube;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import net.minecraft.core.BlockPos;
@@ -214,9 +217,25 @@ public abstract class MixinServerChunkCache extends MixinChunkSource implements 
         return CubePos.of(pX, pY, pZ);
     }
 
-    // TODO (P2) - lighting; currently unused. can probably be done with dasm and @AddUnusedParam
-    public @Nullable LightChunk cc_getCubeForLighting(int pChunkX, int chunkY, int pChunkZ) {
-        throw new UnsupportedOperationException("not yet implemented");
+    /**
+     * Already-resident cube for lighting. Same contract as {@code getChunkForLighting}: no load, no wait.
+     * <p>
+     * The vanilla lookup checkcasts to {@code ChunkAccess}. Cube holders store {@link ImposterProtoCube}, so this uses the cube method and unwraps to
+     * the {@link LevelCube} that owns the light nibbles.
+     */
+    @Override public @Nullable LightChunk cc_getCubeForLighting(int cubeX, int cubeY, int cubeZ) {
+        ChunkHolder holder = this.getVisibleChunkIfPresent(CloPos.cubeAsLong(cubeX, cubeY, cubeZ));
+        if (holder == null) {
+            return null;
+        }
+        CloAccess clo = ((GenerationCloHolder) (Object) holder).cc_getLatestClo();
+        if (clo instanceof ImposterProtoCube imposter && imposter.cc_getWrappedClo() instanceof CubeAccess wrapped) {
+            return wrapped;
+        }
+        if (clo instanceof CubeAccess cube) {
+            return cube;
+        }
+        return null;
     }
 
     @Inject(method = "tick", at = @At("HEAD"), cancellable = true)

@@ -39,8 +39,6 @@ public abstract class MixinChunkSource implements CubeSource, MarkableAsCubic {
         return this.cc_getCube(x, y, z, false);
     }
 
-    // TODO: Phase 2 - getCubeForLighting
-
     public boolean cc_hasCube(int x, int y, int z) {
         return this.cc_getCube(x, y, z, ChunkStatus.FULL, false) != null;
     }

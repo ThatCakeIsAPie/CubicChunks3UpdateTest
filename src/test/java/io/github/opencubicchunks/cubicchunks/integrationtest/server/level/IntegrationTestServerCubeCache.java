@@ -29,6 +29,7 @@ import io.github.opencubicchunks.cubicchunks.testutils.BaseTest;
 import io.github.opencubicchunks.cubicchunks.testutils.CloseableReference;
 import io.github.opencubicchunks.cubicchunks.world.level.cube.LevelCube;
 import io.github.opencubicchunks.cubicchunks.world.level.cube.ProtoCube;
+import io.github.opencubicchunks.cubicchunks.world.lighting.CubicLightEngine;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ChunkMap;
 import net.minecraft.server.level.DistanceManager;
@@ -420,7 +421,8 @@ public class IntegrationTestServerCubeCache extends BaseTest {
     public void fullCubeSinusoidalSurface() throws Exception {
         assertEquals(32, CubicConstants.DIAMETER_IN_BLOCKS);
         try (var serverChunkCacheRef = createServerChunkCache(false)) {
-            var serverCubeCache = (ServerCubeCache) serverChunkCacheRef.value();
+            var chunkCache = serverChunkCacheRef.value();
+            var serverCubeCache = (ServerCubeCache) chunkCache;
             var cubeAccess = serverCubeCache.cc_getCube(0, 0, 0, ChunkStatus.FULL, true);
             assertInstanceOf(LevelCube.class, cubeAccess);
 
@@ -433,6 +435,61 @@ public class IntegrationTestServerCubeCache extends BaseTest {
             assertEquals(Blocks.AIR.defaultBlockState(), cubeAccess.getBlockState(aboveSurface));
             assertEquals(Blocks.SMOOTH_STONE.defaultBlockState(), cubeAccess.getBlockState(columnFloor));
             assertEquals(Blocks.AIR.defaultBlockState(), cubeAccess.getBlockState(airColumn));
+
+            var lightEngine = chunkCache.getLightEngine();
+            assertEquals(0, lightEngine.getRawBrightness(columnFloor, 0), "solid stone is not fullbright");
+            assertEquals(CubicLightEngine.MAX_LEVEL, lightEngine.getRawBrightness(aboveSurface, 0), "air above the surface keeps sky light");
+            assertEquals(0, ((LevelCube) cubeAccess).cc_lightData().skyLight(columnFloor));
+            assertEquals(CubicLightEngine.MAX_LEVEL, ((LevelCube) cubeAccess).cc_lightData().skyLight(aboveSurface));
+        }
+    }
+
+    /**
+     * A torch carved into generated stone lights the air beside it, a stone block stops that light, and both values survive save/reload.
+     */
+    @Test
+    public void torchInSolidCubeCastsLightAndSurvivesReload() throws Exception {
+        Path dimensionPath = Files.createTempDirectory("cc_cube_light");
+        BlockPos torch = new BlockPos(26, 10, 31);
+        BlockPos beside = new BlockPos(27, 10, 31);
+        BlockPos wall = new BlockPos(28, 10, 31);
+        BlockPos behind = new BlockPos(29, 10, 31);
+        int emission = Blocks.TORCH.defaultBlockState().getLightEmission();
+        try (var firstRef = createServerChunkCache(false, dimensionPath)) {
+            ServerChunkCache cache = firstRef.value();
+            try {
+                var cube = ((ServerCubeCache) cache).cc_getCube(0, 0, 0, ChunkStatus.FULL, true);
+                assertInstanceOf(LevelCube.class, cube);
+                assertEquals(Blocks.SMOOTH_STONE.defaultBlockState(), cube.getBlockState(torch));
+                assertEquals(Blocks.SMOOTH_STONE.defaultBlockState(), cube.getBlockState(behind));
+                cube.setBlockState(torch, Blocks.AIR.defaultBlockState(), 0);
+                cube.setBlockState(beside, Blocks.AIR.defaultBlockState(), 0);
+                cube.setBlockState(behind, Blocks.AIR.defaultBlockState(), 0);
+                cube.setBlockState(torch, Blocks.TORCH.defaultBlockState(), 0);
+
+                assertEquals(emission, cube.cc_lightData().blockLight(torch));
+                assertEquals(emission - 1, cube.cc_lightData().blockLight(beside));
+                assertEquals(0, cube.cc_lightData().blockLight(wall));
+                assertEquals(0, cube.cc_lightData().blockLight(behind));
+                assertEquals(emission - 1, cache.getLightEngine().getRawBrightness(beside, 0));
+                assertEquals(0, cache.getLightEngine().getRawBrightness(behind, 0));
+                cache.save(true);
+            } finally {
+                cache.chunkMap.close();
+            }
+        }
+        try (var secondRef = createServerChunkCache(false, dimensionPath)) {
+            ServerChunkCache cache = secondRef.value();
+            try {
+                var cube = ((ServerCubeCache) cache).cc_getCube(0, 0, 0, ChunkStatus.FULL, true);
+                assertInstanceOf(LevelCube.class, cube);
+                assertEquals(Blocks.TORCH.defaultBlockState(), cube.getBlockState(torch));
+                assertEquals(emission, cube.cc_lightData().blockLight(torch));
+                assertEquals(emission - 1, cube.cc_lightData().blockLight(beside));
+                assertEquals(0, cube.cc_lightData().blockLight(behind));
+            } finally {
+                cache.chunkMap.close();
+            }
         }
     }
 

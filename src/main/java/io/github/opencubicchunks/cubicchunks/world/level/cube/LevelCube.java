@@ -22,6 +22,7 @@ import io.github.opencubicchunks.cc_core.world.level.CloPos;
 import io.github.opencubicchunks.cubicchunks.exception.DasmFailedToApply;
 import io.github.opencubicchunks.cubicchunks.mixin.dasmsets.ChunkToCubeSet;
 import io.github.opencubicchunks.cubicchunks.world.level.chunklike.LevelClo;
+import io.github.opencubicchunks.cubicchunks.world.lighting.CubicLightEngine;
 import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import net.minecraft.core.BlockPos;
@@ -144,7 +145,15 @@ public class LevelCube extends CubeAccess implements LevelClo {
 
         this.skyLightSources = cube.skyLightSources;
         this.setLightCorrect(cube.isLightCorrect());
+        this.cc_lightData().copyFrom(lightDataFrom(cube).cc_lightData());
         this.markUnsaved();
+    }
+
+    private static CubeAccess lightDataFrom(CubeAccess cube) {
+        if (cube instanceof ImposterProtoCube imposter && imposter.cc_getWrappedClo() instanceof CubeAccess wrapped) {
+            return wrapped;
+        }
+        return cube;
     }
 
     public void setUnsavedListener(LevelCube.UnsavedListener unsavedListener) {
@@ -185,6 +194,12 @@ public class LevelCube extends CubeAccess implements LevelClo {
     @TransformFromMethod(value = "getFluidState(III)Lnet/minecraft/world/level/material/FluidState;", owner = @Ref(LevelChunk.class))
     @Override public native FluidState getFluidState(int x, int y, int z);
 
+    private void cc_updateCubicLight(BlockPos pos, BlockState previousState, BlockState state) {
+        if (LightEngine.hasDifferentLightProperties(this, pos, previousState, state)) {
+            CubicLightEngine.onBlockChanged(this.level, pos, previousState, state);
+        }
+    }
+
     // TODO might be dasm-able eventually, if we get more powerful mixin tools
     @SuppressWarnings({ "checkstyle:CyclomaticComplexity", "checkstyle:NPathComplexity" }) // <-- copies structure of vanilla method
     @Override public @Nullable BlockState setBlockState(BlockPos pos, BlockState state, int flags) {
@@ -209,9 +224,7 @@ public class LevelCube extends CubeAccess implements LevelClo {
                             SectionPos.blockToSectionCoord(pos.getY()), SectionPos.blockToSectionCoord(pos.getZ()), isOnlyAir);
                 }
 
-                if (LightEngine.hasDifferentLightProperties(this, pos, previousState, state)) {
-                    // TODO (P2) lighting - see vanilla equivalent to this method
-                }
+                this.cc_updateCubicLight(pos, previousState, state);
 
                 boolean flag4 = !previousState.is(block);
                 boolean flag2 = (flags & Block.UPDATE_MOVE_BY_PISTON) != 0;
