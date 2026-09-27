@@ -74,14 +74,11 @@ public abstract class MixinClientChunkCache extends MixinChunkSource implements 
     }
 
     @Override public void cc_drop(CubePos chunkPos) {
-        if (this.cc_cubeStorage.inRange(chunkPos.getX(), chunkPos.getY(), chunkPos.getZ())) {
-            int i = this.cc_cubeStorage.getIndex(chunkPos.getX(), chunkPos.getY(), chunkPos.getZ());
-            LevelCube levelCube = this.cc_cubeStorage.getChunk(i);
-            if (cc_isValidCube(levelCube, chunkPos.getX(), chunkPos.getY(), chunkPos.getZ())) {
-                // TODO event hook
-//                net.neoforged.neoforge.common.NeoForge.EVENT_BUS.post(new net.neoforged.neoforge.event.level.ChunkEvent.Unload(levelCube));
-                this.cc_cubeStorage.drop(i, levelCube);
-            }
+        // Intentionally not gated on inRange. The center packet is sent before the forgets, so a teleport leaves the
+        // cube outside the view before the forget is handled. The slot is still the same modulus.
+        if (this.cc_cubeStorage.dropAt(chunkPos.getX(), chunkPos.getY(), chunkPos.getZ())) {
+            // TODO event hook
+//            net.neoforged.neoforge.common.NeoForge.EVENT_BUS.post(new net.neoforged.neoforge.event.level.ChunkEvent.Unload(levelCube));
         }
     }
 
@@ -147,6 +144,7 @@ public abstract class MixinClientChunkCache extends MixinChunkSource implements 
         this.cc_cubeStorage.viewCenterX = x;
         this.cc_cubeStorage.viewCenterY = y;
         this.cc_cubeStorage.viewCenterZ = z;
+        this.cc_cubeStorage.dropOutsideRange();
         this.updateViewCenter(cubeToSection(x, 0), cubeToSection(z, 0));
     }
 

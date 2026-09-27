@@ -15,6 +15,7 @@ import io.github.opencubicchunks.cubicchunks.mixin.dasmsets.ChunkToCloSet;
 import io.github.opencubicchunks.cubicchunks.network.CCClientboundForgetLevelCloPacket;
 import io.github.opencubicchunks.cubicchunks.network.CCClientboundLevelChunkPacket;
 import io.github.opencubicchunks.cubicchunks.network.CCClientboundLevelCubeWithLightPacket;
+import io.github.opencubicchunks.cubicchunks.server.level.CloDistance;
 import io.github.opencubicchunks.cubicchunks.world.entity.EntityCubePosGetter;
 import io.github.opencubicchunks.cubicchunks.world.level.chunklike.LevelClo;
 import io.github.opencubicchunks.cubicchunks.world.level.cube.LevelCube;
@@ -37,6 +38,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Dasm(value = ChunkToCloSet.class, target = @Ref(PlayerChunkSender.class))
 @Mixin(PlayerChunkSender.class)
@@ -50,6 +52,13 @@ public class MixinPlayerChunkSender {
     @Shadow private float batchQuota;
 
     @Shadow @Final private LongSet pendingChunks;
+
+    /**
+     * Center captured at the start of {@code cc_collectChunksToSend}. The dasm copy sorts with vanilla chessboard distance
+     * on a {@code ChunkPos}, which is not a cube long. The comparators below read this instead.
+     */
+    @Unique
+    private CloPos cc_collectCenter;
 
     @AddTransformToSets(ChunkToCloSet.PlayerChunkSender_redirects.class)
     @TransformFromMethod(value = "markChunkPendingToSend(Lnet/minecraft/world/level/chunk/LevelChunk;)V")
@@ -140,14 +149,27 @@ public class MixinPlayerChunkSender {
     @TransformFromMethod(value = "collectChunksToSend(Lnet/minecraft/server/level/ChunkMap;Lnet/minecraft/world/level/ChunkPos;)Ljava/util/List;")
     private native List<LevelClo> cc_collectChunksToSend(ChunkMap chunkMap, CloPos cloPos);
 
-    // FIXME these should probably have some kind of reasonable sort order - at the very least, chunks before cubes
+    @Dynamic @Inject(method = "cc_collectChunksToSend", at = @At("HEAD"))
+    private void cc_captureCollectCenter(ChunkMap chunkMap, CloPos center, CallbackInfoReturnable<List<LevelClo>> cir) {
+        this.cc_collectCenter = center;
+    }
+
+    // Nearer CLOs fill the batch first. The send loop still writes columns before cubes inside that batch.
     @Dynamic @Redirect(method = "cc_collectChunksToSend", at = @At(ordinal = 0, value = "INVOKE", target = "Ljava/util/Comparator;comparingInt(Ljava/util/function/ToIntFunction;)Ljava/util/Comparator;"))
     private Comparator<Long> cc_onCollectChunksToSend_comparator1(ToIntFunction<Long> keyExtractor) {
-        return (a, b) -> 0;
+        return Comparator.comparingInt(this::cc_pendingOrder);
     }
 
     @Dynamic @Redirect(method = "cc_collectChunksToSend", at = @At(ordinal = 1, value = "INVOKE", target = "Ljava/util/Comparator;comparingInt(Ljava/util/function/ToIntFunction;)Ljava/util/Comparator;"))
     private Comparator<LevelClo> cc_onCollectChunksToSend_comparator2(ToIntFunction<LevelClo> keyExtractor) {
-        return (a, b) -> 0;
+        return Comparator.comparingInt(clo -> this.cc_pendingOrder(clo.cc_getCloPos().asLong()));
+    }
+
+    @Unique
+    private int cc_pendingOrder(long packed) {
+        if (this.cc_collectCenter == null) {
+            return 0;
+        }
+        return CloDistance.chebyshevCubes(this.cc_collectCenter, CloPos.fromLong(packed));
     }
 }

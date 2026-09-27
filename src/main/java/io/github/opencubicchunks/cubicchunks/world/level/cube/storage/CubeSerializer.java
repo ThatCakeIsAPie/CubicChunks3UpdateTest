@@ -49,6 +49,15 @@ public final class CubeSerializer {
     private CubeSerializer() {}
 
     public static CompoundTag write(CubeAccess cube) {
+        CubeAccess data = cube;
+        if (cube instanceof ImposterProtoCube imposter && imposter.cc_getWrappedClo() instanceof CubeAccess wrapped) {
+            data = wrapped;
+        }
+        CubeAccess locked = data;
+        return locked.cc_callWithBlockLock(() -> writeUnlocked(locked));
+    }
+
+    private static CompoundTag writeUnlocked(CubeAccess cube) {
         CompoundTag tag = new CompoundTag();
         var cubePos = cube.cc_getCubePos();
         tag.putInt("xPos", cubePos.getX());

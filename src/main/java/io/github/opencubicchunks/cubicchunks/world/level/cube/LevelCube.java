@@ -201,8 +201,14 @@ public class LevelCube extends CubeAccess implements LevelClo {
     }
 
     // TODO might be dasm-able eventually, if we get more powerful mixin tools
-    @SuppressWarnings({ "checkstyle:CyclomaticComplexity", "checkstyle:NPathComplexity" }) // <-- copies structure of vanilla method
     @Override public @Nullable BlockState setBlockState(BlockPos pos, BlockState state, int flags) {
+        synchronized (this.cc_blockMonitor) {
+            return this.cc_setBlockStateLocked(pos, state, flags);
+        }
+    }
+
+    @SuppressWarnings({ "checkstyle:CyclomaticComplexity", "checkstyle:NPathComplexity" }) // <-- copies structure of vanilla method
+    private @Nullable BlockState cc_setBlockStateLocked(BlockPos pos, BlockState state, int flags) {
         var chunkSection = this.getSection(Coords.blockToIndex(pos));
         boolean wasOnlyAir = chunkSection.hasOnlyAir();
         if (wasOnlyAir && state.isAir()) {

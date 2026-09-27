@@ -15,6 +15,7 @@ import static org.mockito.Mockito.withSettings;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Stream;
 
@@ -25,14 +26,22 @@ import io.github.opencubicchunks.cc_core.world.level.CloPos;
 import io.github.opencubicchunks.cubicchunks.CanBeCubic;
 import io.github.opencubicchunks.cubicchunks.levelgen.CubicOverworldGenerator;
 import io.github.opencubicchunks.cubicchunks.levelgen.CubicOverworldGenerator.SurfaceBiome;
+import io.github.opencubicchunks.cubicchunks.network.CCClientboundCubeBlockChangesPacket;
+import io.github.opencubicchunks.cubicchunks.network.CCClientboundLevelCubeWithLightPacket;
 import io.github.opencubicchunks.cubicchunks.server.level.CubeLevel;
 import io.github.opencubicchunks.cubicchunks.server.level.ServerCubeCache;
 import io.github.opencubicchunks.cubicchunks.testutils.BaseTest;
 import io.github.opencubicchunks.cubicchunks.testutils.CloseableReference;
+import io.github.opencubicchunks.cubicchunks.world.level.cube.CubeAccess;
 import io.github.opencubicchunks.cubicchunks.world.level.cube.LevelCube;
 import io.github.opencubicchunks.cubicchunks.world.level.cube.ProtoCube;
 import io.github.opencubicchunks.cubicchunks.world.lighting.CubicLightEngine;
+import io.netty.buffer.Unpooled;
+import it.unimi.dsi.fastutil.shorts.ShortOpenHashSet;
+import it.unimi.dsi.fastutil.shorts.ShortSet;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.SectionPos;
+import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ChunkMap;
 import net.minecraft.server.level.DistanceManager;
 import net.minecraft.server.level.ServerChunkCache;
@@ -40,6 +49,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.TicketType;
 import net.minecraft.server.level.progress.ProcessorChunkProgressListener;
 import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
@@ -651,5 +661,103 @@ public class IntegrationTestServerCubeCache extends BaseTest {
             assertTrue(cubeAccess.getPersistedStatus().isOrAfter(ChunkStatus.FULL));
             assertInstanceOf(LevelCube.class, cubeAccess);
         }
+    }
+
+    /**
+     * Two editors of one loaded cube, then two client copies fed by the full packet and the dig packet. Save/reload must
+     * still show both edits. Loads go through the cache's main-thread executor, which is what a dedicated server uses.
+     */
+    @Test
+    public void twoEditorsOfOneCubeStayConsistentAcrossClientsAndReload() throws Exception {
+        Path dimensionPath = Files.createTempDirectory("cc_cube_mp");
+        BlockPos digA = findSolidRun(CubicOverworldGenerator.DEFAULT_SEED);
+        BlockPos digB = digA.offset(1, 0, 0);
+        BlockState diamond = Blocks.DIAMOND_BLOCK.defaultBlockState();
+        BlockState gold = Blocks.GOLD_BLOCK.defaultBlockState();
+        BlockState generatedA;
+        BlockState generatedB;
+        try (var firstRef = createServerChunkCache(false, dimensionPath)) {
+            ServerChunkCache cache = firstRef.value();
+            try {
+                CubeAccess first = ((ServerCubeCache) cache).cc_getCube(0, 0, 0, ChunkStatus.FULL, true);
+                CubeAccess second = ((ServerCubeCache) cache).cc_getCube(0, 0, 0, ChunkStatus.FULL, true);
+                assertSame(first, second);
+                assertInstanceOf(LevelCube.class, first);
+                LevelCube serverCube = (LevelCube) first;
+                generatedA = serverCube.getBlockState(digA);
+                generatedB = serverCube.getBlockState(digB);
+                assertEquals(15, generatedA.getLightBlock());
+                assertEquals(15, generatedB.getLightBlock());
+
+                CCClientboundLevelCubeWithLightPacket full = roundTrip(new CCClientboundLevelCubeWithLightPacket(serverCube));
+                LevelCube clientA = clientCopy(cache.level, full);
+                LevelCube clientB = clientCopy(cache.level, full);
+                assertEquals(generatedA, clientA.getBlockState(digA));
+                assertEquals(generatedB, clientB.getBlockState(digB));
+
+                serverCube.setBlockState(digA, diamond, 0);
+                serverCube.setBlockState(digB, gold, 0);
+                CCClientboundCubeBlockChangesPacket delta = roundTrip(
+                        CCClientboundCubeBlockChangesPacket.capture(serverCube, changedSections(digA, digB)));
+                delta.apply(clientA);
+                delta.apply(clientB);
+
+                assertEquals(diamond, serverCube.getBlockState(digA));
+                assertEquals(gold, serverCube.getBlockState(digB));
+                assertEquals(diamond, clientA.getBlockState(digA));
+                assertEquals(gold, clientA.getBlockState(digB));
+                assertEquals(diamond, clientB.getBlockState(digA));
+                assertEquals(gold, clientB.getBlockState(digB));
+                cache.save(true);
+            } finally {
+                cache.chunkMap.close();
+            }
+        }
+        try (var secondRef = createServerChunkCache(false, dimensionPath)) {
+            ServerChunkCache cache = secondRef.value();
+            try {
+                var reloaded = ((ServerCubeCache) cache).cc_getCube(0, 0, 0, ChunkStatus.FULL, true);
+                assertInstanceOf(LevelCube.class, reloaded);
+                assertEquals(diamond, reloaded.getBlockState(digA));
+                assertEquals(gold, reloaded.getBlockState(digB));
+                CCClientboundLevelCubeWithLightPacket full = roundTrip(new CCClientboundLevelCubeWithLightPacket((LevelCube) reloaded));
+                LevelCube client = clientCopy(cache.level, full);
+                assertEquals(diamond, client.getBlockState(digA));
+                assertEquals(gold, client.getBlockState(digB));
+            } finally {
+                cache.chunkMap.close();
+            }
+        }
+    }
+
+    private static LevelCube clientCopy(Level level, CCClientboundLevelCubeWithLightPacket packet) {
+        LevelCube copy = new LevelCube(level, packet.pos());
+        copy.replaceWithPacketData(packet.cubeData().getReadBuffer(), Map.of(), tag -> {});
+        packet.light().apply(copy);
+        return copy;
+    }
+
+    private static CCClientboundLevelCubeWithLightPacket roundTrip(CCClientboundLevelCubeWithLightPacket packet) {
+        FriendlyByteBuf buf = new FriendlyByteBuf(Unpooled.buffer());
+        CCClientboundLevelCubeWithLightPacket.STREAM_CODEC.encode(buf, packet);
+        return CCClientboundLevelCubeWithLightPacket.STREAM_CODEC.decode(buf);
+    }
+
+    private static CCClientboundCubeBlockChangesPacket roundTrip(CCClientboundCubeBlockChangesPacket packet) {
+        FriendlyByteBuf buf = new FriendlyByteBuf(Unpooled.buffer());
+        CCClientboundCubeBlockChangesPacket.STREAM_CODEC.encode(buf, packet);
+        return CCClientboundCubeBlockChangesPacket.STREAM_CODEC.decode(buf);
+    }
+
+    private static ShortSet[] changedSections(BlockPos... positions) {
+        ShortSet[] sets = new ShortSet[CubicConstants.SECTION_COUNT];
+        for (BlockPos pos : positions) {
+            int index = Coords.blockToIndex(pos);
+            if (sets[index] == null) {
+                sets[index] = new ShortOpenHashSet();
+            }
+            sets[index].add(SectionPos.sectionRelativePos(pos));
+        }
+        return sets;
     }
 }

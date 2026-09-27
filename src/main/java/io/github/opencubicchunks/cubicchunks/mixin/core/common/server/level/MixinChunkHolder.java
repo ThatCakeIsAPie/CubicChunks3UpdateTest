@@ -14,10 +14,12 @@ import io.github.notstirred.dasm.api.annotations.redirect.redirects.AddTransform
 import io.github.notstirred.dasm.api.annotations.selector.Ref;
 import io.github.notstirred.dasm.api.annotations.transform.TransformFromMethod;
 import io.github.opencubicchunks.cc_core.api.CubePos;
+import io.github.opencubicchunks.cc_core.api.CubicConstants;
 import io.github.opencubicchunks.cc_core.utils.Coords;
 import io.github.opencubicchunks.cubicchunks.exception.DasmFailedToApply;
 import io.github.opencubicchunks.cubicchunks.mixin.dasmsets.ChunkToCloSet;
 import io.github.opencubicchunks.cubicchunks.mixin.dasmsets.ChunkToCubeSet;
+import io.github.opencubicchunks.cubicchunks.network.CCClientboundCubeBlockChangesPacket;
 import io.github.opencubicchunks.cubicchunks.server.level.CloHolder;
 import io.github.opencubicchunks.cubicchunks.server.level.CubeHolder;
 import io.github.opencubicchunks.cubicchunks.server.level.CubicChunkMap;
@@ -30,17 +32,21 @@ import net.minecraft.server.level.ChunkHolder;
 import net.minecraft.server.level.ChunkMap;
 import net.minecraft.server.level.FullChunkStatus;
 import net.minecraft.server.level.GenerationChunkHolder;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.LevelHeightAccessor;
 import net.minecraft.world.level.LightLayer;
 import net.minecraft.world.level.chunk.LevelChunk;
+import net.neoforged.neoforge.network.PacketDistributor;
 import org.spongepowered.asm.mixin.Dynamic;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Mutable;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.Redirect;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
@@ -52,7 +58,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(ChunkHolder.class)
 public abstract class MixinChunkHolder extends MixinGenerationChunkHolder implements CloHolder, CubeHolder {
     @Shadow private boolean hasChangedSections;
-    @Shadow @Final private ShortSet[] changedBlocksPerSection;
+    @Shadow @Final @Mutable private ShortSet[] changedBlocksPerSection;
 
     @AddFieldToSets(containers = ChunkToCubeSet.ChunkHolder_redirects.class, field = "onLevelChange:Lnet/minecraft/server/level/ChunkHolder$LevelChangeListener;")
     private final LevelChangeListener cc_onLevelChange;
@@ -112,6 +118,24 @@ public abstract class MixinChunkHolder extends MixinGenerationChunkHolder implem
     private int cc_onBlockChanged_sectionIndex(LevelHeightAccessor instance, int y, BlockPos pos) {
         return Coords.sectionToIndex(Coords.blockToSection(pos.getX()), Coords.blockToSection(pos.getY()), Coords.blockToSection(pos.getZ()));
     }
+
+    /**
+     * {@code changedBlocksPerSection} is sized to the column section count. A cube section index can be larger (diameter 4+
+     * or a short dimension). Grow before the dasm body indexes the array, or the dig is dropped and other players never
+     * hear about it.
+     */
+    @Dynamic @Inject(method = "cc_blockChanged", at = @At("HEAD"))
+    private void cc_ensureChangedBlockCapacity(BlockPos pos, CallbackInfoReturnable<Boolean> cir) {
+        int index = Coords.sectionToIndex(Coords.blockToSection(pos.getX()), Coords.blockToSection(pos.getY()), Coords.blockToSection(pos.getZ()));
+        ShortSet[] current = this.changedBlocksPerSection;
+        if (index < current.length) {
+            return;
+        }
+        int size = Math.max(CubicConstants.SECTION_COUNT, index + 1);
+        ShortSet[] grown = new ShortSet[size];
+        System.arraycopy(current, 0, grown, 0, current.length);
+        this.changedBlocksPerSection = grown;
+    }
     // endregion
 
     @Inject(method = "sectionLightChanged", at = @At("HEAD"), cancellable = true)
@@ -127,8 +151,32 @@ public abstract class MixinChunkHolder extends MixinGenerationChunkHolder implem
     @AddTransformToSets(ChunkToCubeSet.ChunkHolder_redirects.class)
     @TransformFromMethod(owner = @Ref(ChunkHolder.class), value = "broadcastChanges(Lnet/minecraft/world/level/chunk/LevelChunk;)V")
     public native void cc_broadcastCubeChanges(LevelCube cube);
-    // TODO (P2) lighting - ClientboundLightUpdatePacket branch is currently never reached; once we have lighting it will have to be a CC packet, and
-    // this.broadcast will need to redirect to a CC method
+
+    /**
+     * Replaces the dasm copy of {@code broadcastChanges}. That copy still emits {@code ClientboundSectionBlocksUpdatePacket},
+     * addressed as a column section and without the cube light snapshot. Tracking players get a cube packet that names
+     * the cube and includes the server light nibbles.
+     */
+    @Dynamic @Inject(method = "cc_broadcastCubeChanges", at = @At("HEAD"), cancellable = true)
+    private void cc_broadcastCubeBlockChanges(LevelCube cube, CallbackInfo ci) {
+        ci.cancel();
+        if (!this.hasChangedSections) {
+            return;
+        }
+        CCClientboundCubeBlockChangesPacket packet = CCClientboundCubeBlockChangesPacket.capture(cube, this.changedBlocksPerSection);
+        this.hasChangedSections = false;
+        for (ShortSet changed : this.changedBlocksPerSection) {
+            if (changed != null) {
+                changed.clear();
+            }
+        }
+        if (packet.changes().isEmpty() || this.cc_playerProvider == null) {
+            return;
+        }
+        for (ServerPlayer player : this.cc_playerProvider.cc_getPlayers(cube.cc_getCubePos(), false)) {
+            PacketDistributor.sendToPlayer(player, packet);
+        }
+    }
 
     @Dynamic @Redirect(method = "cc_broadcastCubeChanges", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/LevelHeightAccessor;getSectionYFromSectionIndex(I)I"))
     private int cc_onBroadcastCubeChanges_indexToSectionY(LevelHeightAccessor instance, int sectionIndex) {
