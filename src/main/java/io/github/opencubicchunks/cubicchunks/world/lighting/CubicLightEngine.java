@@ -47,22 +47,30 @@ public final class CubicLightEngine {
     public static void lightCube(CubeAccess cube, CubicLightView view) {
         relight(cube, view);
         cube.setLightCorrect(true);
-        refreshAlreadyLitNeighbors(cube, view);
+        // Uniform cubes do not spread new light sideways. Opaque cubes only change sky in the column below.
+        if (isFullyOpaque(cube)) {
+            refreshColumnBelow(cube, view);
+            return;
+        }
+        if (!isAllAir(cube)) {
+            refreshAlreadyLitNeighbors(cube, view);
+        }
     }
 
     /** Recompute {@code cube} from {@code view}. Does not walk neighbors. */
     public static void relight(CubeAccess cube, CubicLightView view) {
-        if (tryFastOpaqueCube(cube) || tryFastClearCube(cube, view)) {
+        CubicLightView cached = view instanceof CachingCubicLightView ? view : new CachingCubicLightView(view);
+        if (tryFastOpaqueCube(cube) || tryFastClearCube(cube, cached)) {
             return;
         }
         LightVolume volume = new LightVolume(cube.cc_getCubePos());
         ArrayDeque<Long> blockQueue = new ArrayDeque<>();
-        seedBlockLight(volume, view, blockQueue);
-        propagate(volume, view, blockQueue, false);
-        fillSky(volume, view);
+        seedBlockLight(volume, cached, blockQueue);
+        propagate(volume, cached, blockQueue, false);
+        fillSky(volume, cached);
         ArrayDeque<Long> skyQueue = new ArrayDeque<>();
-        enqueueSkySources(volume, view, skyQueue);
-        propagate(volume, view, skyQueue, true);
+        enqueueSkySources(volume, cached, skyQueue);
+        propagate(volume, cached, skyQueue, true);
         writeCube(volume, cube);
     }
 
@@ -101,6 +109,11 @@ public final class CubicLightEngine {
         refreshIfLit(view, pos.getX() - 1, pos.getY(), pos.getZ());
         refreshIfLit(view, pos.getX(), pos.getY(), pos.getZ() + 1);
         refreshIfLit(view, pos.getX(), pos.getY(), pos.getZ() - 1);
+        refreshColumnBelow(cube, view);
+    }
+
+    private static void refreshColumnBelow(CubeAccess cube, CubicLightView view) {
+        CubePos pos = cube.cc_getCubePos();
         int minY = pos.getY() - skyDependentCubes();
         for (int y = pos.getY() - 1; y >= minY; y--) {
             refreshIfLit(view, pos.getX(), y, pos.getZ());
@@ -488,6 +501,9 @@ public final class CubicLightEngine {
     }
 
     private static @Nullable BlockState stateAt(CubicLightView view, BlockPos.MutableBlockPos pos, int x, int y, int z) {
+        if (view instanceof CachingCubicLightView caching) {
+            return caching.stateAt(x, y, z);
+        }
         CubeAccess cube = view.cubeAt(Coords.blockToCube(x), Coords.blockToCube(y), Coords.blockToCube(z));
         if (cube == null) {
             return null;
