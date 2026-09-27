@@ -37,7 +37,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public abstract class MixinServerLevel extends MixinLevel implements CubicServerLevel {
     @Shadow @Final private ServerChunkCache chunkSource;
     @Shadow public abstract float getMoonBrightness(BlockPos pos);
-    @Shadow public abstract long getOverworldClockTime();
 
     @Inject(method = "<init>", at = @At("CTOR_HEAD"))
     private void cc_onInit(

@@ -46,6 +46,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public abstract class MixinLevel implements CubicLevel, MarkableAsCubic, LevelAccessor {
     @Shadow public abstract @Nullable ChunkAccess getChunk(int chunkX, int chunkZ, ChunkStatus requestedStatus, boolean forceLoad);
 
+    @Shadow public abstract long getOverworldClockTime();
+
     protected boolean cc_isCubic;
 
     @Override public void cc_setCubic() {
