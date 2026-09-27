@@ -24,7 +24,7 @@ import java.util.regex.Pattern;
 import com.google.gson.stream.JsonWriter;
 import org.gradle.api.Action;
 import org.gradle.api.file.SourceDirectorySet;
-import org.gradle.api.plugins.JavaPluginConvention;
+import org.gradle.api.plugins.JavaPluginExtension;
 import org.gradle.api.tasks.SourceSet;
 
 @SuppressWarnings("unused")
@@ -81,8 +81,8 @@ public class DasmGenExtension {
         }
     }
 
-    void generateFiles(JavaPluginConvention convention) throws IOException {
-        convention.getSourceSets().forEach(sourceSet -> {
+    void generateFiles(JavaPluginExtension javaPlugin) throws IOException {
+        javaPlugin.getSourceSets().forEach(sourceSet -> {
             Map<String, Action<DasmConfig>> configs = configsBySourceSet.get(sourceSet);
             if (configs == null) {
                 return;
@@ -117,7 +117,7 @@ public class DasmGenExtension {
                             writer.name("minVersion").value(config.minVersion);
                         }
 
-                        writeDasm(convention, sourceSet, name, config, writer);
+                        writeDasm(sourceSet, name, config, writer);
 
                         writer.endObject();
                     }
@@ -128,7 +128,7 @@ public class DasmGenExtension {
         });
     }
 
-    private void writeDasm(JavaPluginConvention convention, SourceSet sourceSet, String name, DasmConfig config, JsonWriter writer)
+    private void writeDasm(SourceSet sourceSet, String name, DasmConfig config, JsonWriter writer)
             throws IOException {
         Set<String> dasmTypes = getDasmClasses(config, sourceSet.getAllJava());
 
