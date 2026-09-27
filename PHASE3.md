@@ -12,8 +12,9 @@ Sky light is a documented heuristic (below), stored in the same nibble arrays. `
 
 Where it is hooked:
 
-- `CubeStatusTasks.light` calls `CubicLightEngine.lightCube`. `initializeLight` is still `passThrough`.
+- `CubeStatusTasks.light` calls `CubicLightEngine.lightCube`. `initializeLight` is still `passThrough`. A relight caches cube and uniform-section block states for that pass.
 - `LevelCube.setBlockState` relights the edited cube when light properties change, plus already-lit cubes within 15 blocks, and the downward column within the sky search when opacity changes. It does not enqueue vanilla column light tasks. `ProtoCube.setBlockState` (noise) does not relight.
+- `ServerChunkCache.cc_getCubeForLighting` reads the latest cube from the holder. Vanilla `getChunkIfPresentUnchecked` checkcasts to `ChunkAccess` and throws on `ImposterProtoCube`. The imposter is unwrapped so queries and edits use the `LevelCube` that owns the nibbles. The call does not load or wait.
 - `CCClientboundLevelCubeWithLightPacket` carries packed nibbles (`CubeLightPacketData`). The handler applies them and sets `isLightCorrect` before the render callback. Client section existence requires the cube and `isLightCorrect()`, so an unlit cube is not meshed.
 - `CubeSerializer` writes `cc_light`. A full cube loaded without that tag is relit from itself (unloaded space is open sky). A proto only restores the tag; its light status still runs.
 - Promotion `LevelCube(ServerLevel, ProtoCube)` copies the nibbles, unwrapping `ImposterProtoCube`.
@@ -42,7 +43,7 @@ Consequences:
 
 `IntegrationTestServerCubeCache.fullCubeSinusoidalSurface` checks sky 0 in the stone floor and sky 15 in the air above it. `torchInSolidCubeCastsLightAndSurvivesReload` places a torch in the sinusoid stone, checks occlusion, saves, and reloads the block light. The cube-with-light packet serde asserts a non-zero nibble round-trip.
 
-`./gradlew test` result is recorded after the full run in the PR body. No new `@Disabled` tests were added. The nine pre-existing skips stay: `TestClientCubeCache` (3), packet handler tests (3), `TestMinecraftServer` vanilla prepare/spawn (2), `TestCubicServerLevel.testVanillaSetChunkForced`.
+`./gradlew test` on JDK 21: **PASS**. **125 tests, 0 failures, 0 errors, 9 skipped**. `checkstyleMain` and `checkstyleTest` passed. `CubicChunksCore:test` is still skipped by design. No new `@Disabled` tests were added. The nine pre-existing skips stay: `TestClientCubeCache` (3), packet handler tests (3), `TestMinecraftServer` vanilla prepare/spawn (2), `TestCubicServerLevel.testVanillaSetChunkForced`.
 
 ## What still blocks a playable look
 
