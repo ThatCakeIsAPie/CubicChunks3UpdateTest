@@ -38,6 +38,9 @@ import org.mockito.Answers;
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 public class TestCubicOverworldGenerator extends BaseTest {
     private static final long SEED = CubicOverworldGenerator.DEFAULT_SEED;
+    /** Desert on seed 0 starts past ±256. The scan has to reach it. */
+    private static final int SEARCH = 640;
+    private static final int SEARCH_STEP = 8;
 
     @Test
     public void columnMaterials_grassDirtStoneCaveOreWaterAndNoBedrock() {
@@ -62,9 +65,9 @@ public class TestCubicOverworldGenerator extends BaseTest {
         ProtoCube underground = fill(CubePos.of(0, 0, 0));
         assertTrue(count(underground, Blocks.STONE.defaultBlockState()) > 0);
         assertTrue(countOre(underground) > 0, "underground cube should contain an ore");
-        assertTrue(countCave(underground) > 0, "underground cube should contain cave air");
         assertEquals(0, count(underground, Blocks.BEDROCK.defaultBlockState()));
         assertEquals(0, count(underground, Blocks.SMOOTH_STONE.defaultBlockState()));
+        assertTrue(countCave(findCaveCube()) > 0, "an underground cube should contain cave air");
     }
 
     @Test
@@ -106,8 +109,7 @@ public class TestCubicOverworldGenerator extends BaseTest {
         for (int y = shifted.minCubeY(); y <= shifted.maxCubeY(); y++) {
             assertEquals(CubicOverworldGenerator.blockState(SEED, x, y, z), cube.getBlockState(new BlockPos(x, y, z)), y + "");
         }
-        assertNotEquals(CubicOverworldGenerator.blockState(SEED, 0, shifted.minCubeY(), 0),
-                CubicOverworldGenerator.blockState(SEED, x, shifted.minCubeY(), z));
+        assertTrue(surfaceDiffersFromOrigin(shifted), "a shifted cube must sample world XZ, not the origin column");
     }
 
     @Test
@@ -172,8 +174,8 @@ public class TestCubicOverworldGenerator extends BaseTest {
     }
 
     private BlockPos findBiome(SurfaceBiome biome) {
-        for (int x = -256; x <= 256; x += 8) {
-            for (int z = -256; z <= 256; z += 8) {
+        for (int x = -SEARCH; x <= SEARCH; x += SEARCH_STEP) {
+            for (int z = -SEARCH; z <= SEARCH; z += SEARCH_STEP) {
                 if (CubicOverworldGenerator.biomeAt(SEED, x, z) == biome) {
                     return new BlockPos(x, 0, z);
                 }
@@ -183,8 +185,8 @@ public class TestCubicOverworldGenerator extends BaseTest {
     }
 
     private BlockPos findWalkable(SurfaceBiome biome, BlockState cover, BlockState under) {
-        for (int x = -192; x <= 192; x++) {
-            for (int z = -192; z <= 192; z++) {
+        for (int x = -SEARCH; x <= SEARCH; x++) {
+            for (int z = -SEARCH; z <= SEARCH; z++) {
                 if (CubicOverworldGenerator.biomeAt(SEED, x, z) != biome) {
                     continue;
                 }
@@ -220,9 +222,23 @@ public class TestCubicOverworldGenerator extends BaseTest {
         return null;
     }
 
+    private boolean surfaceDiffersFromOrigin(CubePos shifted) {
+        int diameter = CubicConstants.DIAMETER_IN_BLOCKS;
+        for (int dx = 0; dx < diameter; dx++) {
+            for (int dz = 0; dz < diameter; dz++) {
+                int worldX = shifted.minCubeX() + dx;
+                int worldZ = shifted.minCubeZ() + dz;
+                if (CubicOverworldGenerator.surfaceY(SEED, worldX, worldZ) != CubicOverworldGenerator.surfaceY(SEED, dx, dz)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
     private BlockPos findWater() {
-        for (int x = -160; x <= 160; x += 2) {
-            for (int z = -160; z <= 160; z += 2) {
+        for (int x = -SEARCH; x <= SEARCH; x += 2) {
+            for (int z = -SEARCH; z <= SEARCH; z += 2) {
                 int surface = CubicOverworldGenerator.surfaceY(SEED, x, z);
                 if (surface >= CubicOverworldGenerator.SEA_LEVEL) {
                     continue;
@@ -234,6 +250,19 @@ public class TestCubicOverworldGenerator extends BaseTest {
             }
         }
         throw new AssertionError("no ocean water");
+    }
+
+    /** Cheese caves miss some cubes, including {@code (0,0,0)} on the default seed. A neighbor still opens. */
+    private ProtoCube findCaveCube() {
+        for (int x = -2; x <= 2; x++) {
+            for (int z = -2; z <= 2; z++) {
+                ProtoCube cube = fill(CubePos.of(x, 0, z));
+                if (countCave(cube) > 0) {
+                    return cube;
+                }
+            }
+        }
+        throw new AssertionError("no cave air in cubes y=0, x/z -2..2");
     }
 
     private ProtoCube fill(CubePos cubePos) {
