@@ -67,7 +67,7 @@ Risks that remain:
 
 `IntegrationTestServerCubeCache` stubs `ServerLevel.getSeed()` to the default seed. `fullCubeOverworldSurfaceAndLight` loads a grass column to `FULL`, checks grass, dirt, air above, no bedrock, and Phase 3 sky (0 in the buried opaque block, 15 in the air). `torchInSolidCubeCastsLightAndSurvivesReload` carves a torch into generated stone and checks occlusion plus save/reload. `cubeBlocksSurviveSaveAndReload` edits one block to diamond and checks that the neighbor generated block is still the generator state after a new cache on the same directory, so the reload is the saved cube and not a fresh fill.
 
-Gradle result is recorded after `./gradlew test` on this revision.
+`./gradlew test` on JDK 21: **PASS**. **131 tests, 0 failures, 0 errors, 9 skipped** (125 before this phase). `checkstyleMain` and `checkstyleTest` passed. `CubicChunksCore:test` is still skipped by design. No new `@Disabled` tests were added. The nine pre-existing skips stay: `TestClientCubeCache` (3), packet handler tests (3), `TestMinecraftServer` vanilla prepare/spawn (2), `TestCubicServerLevel.testVanillaSetChunkForced`.
 
 ## How to run
 
