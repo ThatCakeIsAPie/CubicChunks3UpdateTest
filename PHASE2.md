@@ -26,11 +26,9 @@ Cube unload no longer uses the empty `cc_scheduleUnload` replacement. Vanilla `s
 
 ## Test run
 
-`./gradlew test` on JDK 21: see the PR / the latest run recorded below.
+`./gradlew test` on JDK 21: **PASS**. **116 tests, 0 failures, 0 errors, 9 skipped** (115 before this phase, plus `cubeBlocksSurviveSaveAndReload`). `checkstyleMain` and `checkstyleTest` passed. `CubicChunksCore:test` is still skipped by design.
 
-No new `@Disabled` tests were added. `CubicChunksCore:test` is still skipped by design.
-
-The nine pre-existing skips are unchanged: `TestClientCubeCache` (3), packet handler tests (3), `TestMinecraftServer` vanilla prepare/spawn (2), `TestCubicServerLevel.testVanillaSetChunkForced`.
+No new `@Disabled` tests were added. The nine pre-existing skips are unchanged: `TestClientCubeCache` (3), packet handler tests (3), `TestMinecraftServer` vanilla prepare/spawn (2), `TestCubicServerLevel.testVanillaSetChunkForced`.
 
 ## What still blocks a playable session
 
