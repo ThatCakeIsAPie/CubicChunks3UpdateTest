@@ -2,6 +2,8 @@ package io.github.opencubicchunks.cubicchunks.world.level.cube.status;
 
 import java.util.concurrent.CompletableFuture;
 
+import javax.annotation.Nullable;
+
 import com.mojang.logging.LogUtils;
 import io.github.notstirred.dasm.api.annotations.Dasm;
 import io.github.notstirred.dasm.api.annotations.redirect.redirects.AddFieldToSets;
@@ -9,18 +11,18 @@ import io.github.notstirred.dasm.api.annotations.redirect.redirects.AddMethodToS
 import io.github.notstirred.dasm.api.annotations.redirect.redirects.AddTransformToSets;
 import io.github.notstirred.dasm.api.annotations.selector.Ref;
 import io.github.notstirred.dasm.api.annotations.transform.TransformFromMethod;
-import io.github.opencubicchunks.cc_core.api.CubicConstants;
-import io.github.opencubicchunks.cubicchunks.CubicChunks;
+import io.github.opencubicchunks.cubicchunks.levelgen.CubicOverworldGenerator;
 import io.github.opencubicchunks.cubicchunks.mixin.dasmsets.ChunkToCubeSet;
 import io.github.opencubicchunks.cubicchunks.util.StaticCache3D;
 import io.github.opencubicchunks.cubicchunks.world.level.chunk.status.CCChunkStatusTasks;
 import io.github.opencubicchunks.cubicchunks.world.level.cube.CubeAccess;
 import io.github.opencubicchunks.cubicchunks.world.lighting.CubicLightEngine;
 import io.github.opencubicchunks.cubicchunks.world.lighting.GenerationCubicLightView;
-import net.minecraft.core.BlockPos;
+import net.minecraft.core.Registry;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.server.level.GenerationChunkHolder;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.chunk.status.ChunkStatusTasks;
 import net.minecraft.world.level.chunk.status.WorldGenContext;
 import net.minecraft.world.level.storage.ValueInput;
@@ -50,7 +52,8 @@ public class CubeStatusTasks {
         return CompletableFuture.completedFuture(cube);
     }
 
-    // TODO (P3) we skip cube generation steps for now by delegating to passThrough
+    // Structure starts stay pass-through. Vanilla jigsaw placement is 2D, asks neighboring chunks for pieces, and would wait on
+    // cubes that are waiting on this one. Y-aware structures are not part of this fill.
     @AddMethodToSets(containers = ChunkToCubeSet.ChunkStatusTasks_to_CubeStatusTasks_redirects.class, method = "generateStructureStarts(Lnet/minecraft/world/level/chunk/status/WorldGenContext;"
             + "Lnet/minecraft/world/level/chunk/status/ChunkStep;Lnet/minecraft/util/StaticCache2D;Lnet/minecraft/world/level/chunk/ChunkAccess;)"
             + "Ljava/util/concurrent/CompletableFuture;")
@@ -82,34 +85,36 @@ public class CubeStatusTasks {
     public static CompletableFuture<CubeAccess> generateBiomes(
             WorldGenContext worldGenContext, CubeStep step, StaticCache3D<GenerationChunkHolder> cache, CubeAccess cube
     ) {
-        return passThrough(worldGenContext, step, cache, cube);
+        CubicOverworldGenerator.fillBiomes(cube, worldSeed(worldGenContext), biomeRegistry(worldGenContext));
+        return CompletableFuture.completedFuture(cube);
     }
 
-    @SuppressWarnings("checkstyle:MagicNumber") // hardcoded terrain generation; the constants are arbitrary
     @AddMethodToSets(containers = ChunkToCubeSet.ChunkStatusTasks_to_CubeStatusTasks_redirects.class, method = "generateNoise(Lnet/minecraft/world/level/chunk/status/WorldGenContext;Lnet/minecraft/world/level/chunk/status/ChunkStep;"
             + "Lnet/minecraft/util/StaticCache2D;Lnet/minecraft/world/level/chunk/ChunkAccess;)Ljava/util/concurrent/CompletableFuture;")
     public static CompletableFuture<CubeAccess> generateNoise(
             WorldGenContext worldGenContext, CubeStep step, StaticCache3D<GenerationChunkHolder> cache, CubeAccess cube
     ) {
-        // Temporary basic sinusoidal terrain, so we can generate a simple test world
-        int amplitude = 20;
-        var blockPos = new BlockPos.MutableBlockPos();
-        var blockState = Blocks.SMOOTH_STONE.defaultBlockState();
-        int minY = cube.cc_getCubePos().minCubeY();
-        int maxY = Math.min(cube.cc_getCubePos().maxCubeY(), CubicChunks.SUPERFLAT_HEIGHT + amplitude);
-        int cubeX = cube.cc_getCubePos().minCubeX();
-        int cubeZ = cube.cc_getCubePos().minCubeZ();
-        for (int y = minY; y <= maxY; y++) {
-            for (int x = 0; x < CubicConstants.DIAMETER_IN_BLOCKS; x++) {
-                for (int z = 0; z < CubicConstants.DIAMETER_IN_BLOCKS; z++) {
-                    if (y + Math.round((amplitude * (Math.sin((x + cubeX) / 8.0 + (z + cubeZ) / 21.0) + Math.cos((z + cubeZ) / 13.0)))
-                            / 2.0) <= CubicChunks.SUPERFLAT_HEIGHT) {
-                        cube.setBlockState(blockPos.set(x, y, z), blockState);
-                    }
-                }
-            }
-        }
+        // One cube, no neighbor lookup. The cache is unused so this task cannot wait on another cube.
+        CubicOverworldGenerator.fillCube(cube, worldSeed(worldGenContext));
         return CompletableFuture.completedFuture(cube);
+    }
+
+    private static long worldSeed(WorldGenContext worldGenContext) {
+        if (worldGenContext == null) {
+            return CubicOverworldGenerator.DEFAULT_SEED;
+        }
+        return worldGenContext.level().getSeed();
+    }
+
+    private static @Nullable Registry<Biome> biomeRegistry(WorldGenContext worldGenContext) {
+        if (worldGenContext == null) {
+            return null;
+        }
+        try {
+            return worldGenContext.level().registryAccess().lookupOrThrow(Registries.BIOME);
+        } catch (RuntimeException ex) {
+            return null;
+        }
     }
 
     @AddMethodToSets(containers = ChunkToCubeSet.ChunkStatusTasks_to_CubeStatusTasks_redirects.class, method = "generateSurface(Lnet/minecraft/world/level/chunk/status/WorldGenContext;Lnet/minecraft/world/level/chunk/status/ChunkStep;"
@@ -117,6 +122,8 @@ public class CubeStatusTasks {
     public static CompletableFuture<CubeAccess> generateSurface(
             WorldGenContext worldGenContext, CubeStep step, StaticCache3D<GenerationChunkHolder> cache, CubeAccess cube
     ) {
+        // Grass, dirt, sand, snow, and the "no bedrock" rule are applied in generateNoise. A separate surface pass would
+        // be the vanilla place that writes a bedrock floor at min build height.
         return passThrough(worldGenContext, step, cache, cube);
     }
 

@@ -23,6 +23,8 @@ import io.github.opencubicchunks.cc_core.api.CubicConstants;
 import io.github.opencubicchunks.cc_core.utils.Coords;
 import io.github.opencubicchunks.cc_core.world.level.CloPos;
 import io.github.opencubicchunks.cubicchunks.CanBeCubic;
+import io.github.opencubicchunks.cubicchunks.levelgen.CubicOverworldGenerator;
+import io.github.opencubicchunks.cubicchunks.levelgen.CubicOverworldGenerator.SurfaceBiome;
 import io.github.opencubicchunks.cubicchunks.server.level.CubeLevel;
 import io.github.opencubicchunks.cubicchunks.server.level.ServerCubeCache;
 import io.github.opencubicchunks.cubicchunks.testutils.BaseTest;
@@ -39,6 +41,7 @@ import net.minecraft.server.level.TicketType;
 import net.minecraft.server.level.progress.ProcessorChunkProgressListener;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.ProtoChunk;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
@@ -94,6 +97,7 @@ public class IntegrationTestServerCubeCache extends BaseTest {
             f.set(serverLevelMock, true);
             when(((CanBeCubic) serverLevelMock).cc_isCubic()).thenReturn(true);
         }
+        when(serverLevelMock.getSeed()).thenReturn(CubicOverworldGenerator.DEFAULT_SEED);
         when(serverLevelMock.getHeight()).thenReturn(384);
         when(serverLevelMock.getSectionsCount()).thenReturn(24);
         // We seem to need an actual directory, not a mock
@@ -414,54 +418,55 @@ public class IntegrationTestServerCubeCache extends BaseTest {
     }
 
     /**
-     * Cube {@code (0,0,0)} loaded to {@link ChunkStatus#FULL} keeps the sinusoidal smooth-stone fill from
-     * {@code CubeStatusTasks.generateNoise}.
+     * A cube loaded to {@link ChunkStatus#FULL} keeps the overworld grass/dirt fill, and phase-3 sky light still treats
+     * buried ground as dark and open air as sky.
      */
     @Test
-    public void fullCubeSinusoidalSurface() throws Exception {
+    public void fullCubeOverworldSurfaceAndLight() throws Exception {
         assertEquals(32, CubicConstants.DIAMETER_IN_BLOCKS);
+        BlockPos grass = findOpenGrass(CubicOverworldGenerator.DEFAULT_SEED);
+        BlockPos above = grass.above();
+        BlockPos buried = grass.below(4);
         try (var serverChunkCacheRef = createServerChunkCache(false)) {
             var chunkCache = serverChunkCacheRef.value();
             var serverCubeCache = (ServerCubeCache) chunkCache;
-            var cubeAccess = serverCubeCache.cc_getCube(0, 0, 0, ChunkStatus.FULL, true);
+            var cubeAccess = serverCubeCache.cc_getCube(Coords.blockToCube(grass.getX()), Coords.blockToCube(grass.getY()),
+                    Coords.blockToCube(grass.getZ()), ChunkStatus.FULL, true);
             assertInstanceOf(LevelCube.class, cubeAccess);
 
-            // (31, 31) surfaces at y=20. (0, 0) surfaces at y=-5, so this cube is air there.
-            BlockPos surface = new BlockPos(31, 20, 31);
-            BlockPos aboveSurface = new BlockPos(31, 21, 31);
-            BlockPos columnFloor = new BlockPos(31, 0, 31);
-            BlockPos airColumn = new BlockPos(0, 0, 0);
-            assertEquals(Blocks.SMOOTH_STONE.defaultBlockState(), cubeAccess.getBlockState(surface));
-            assertEquals(Blocks.AIR.defaultBlockState(), cubeAccess.getBlockState(aboveSurface));
-            assertEquals(Blocks.SMOOTH_STONE.defaultBlockState(), cubeAccess.getBlockState(columnFloor));
-            assertEquals(Blocks.AIR.defaultBlockState(), cubeAccess.getBlockState(airColumn));
+            assertEquals(Blocks.GRASS_BLOCK.defaultBlockState(), cubeAccess.getBlockState(grass));
+            assertEquals(Blocks.DIRT.defaultBlockState(), cubeAccess.getBlockState(grass.below()));
+            assertEquals(Blocks.AIR.defaultBlockState(), cubeAccess.getBlockState(above));
+            assertEquals(15, cubeAccess.getBlockState(buried).getLightBlock());
+            assertEquals(0, countBedrock((LevelCube) cubeAccess));
 
             var lightEngine = chunkCache.getLightEngine();
-            assertEquals(0, lightEngine.getRawBrightness(columnFloor, 0), "solid stone is not fullbright");
-            assertEquals(CubicLightEngine.MAX_LEVEL, lightEngine.getRawBrightness(aboveSurface, 0), "air above the surface keeps sky light");
-            assertEquals(0, ((LevelCube) cubeAccess).cc_lightData().skyLight(columnFloor));
-            assertEquals(CubicLightEngine.MAX_LEVEL, ((LevelCube) cubeAccess).cc_lightData().skyLight(aboveSurface));
+            assertEquals(0, lightEngine.getRawBrightness(buried, 0), "solid ground is not fullbright");
+            assertEquals(CubicLightEngine.MAX_LEVEL, lightEngine.getRawBrightness(above, 0), "air above the surface keeps sky light");
+            assertEquals(0, ((LevelCube) cubeAccess).cc_lightData().skyLight(buried));
+            assertEquals(CubicLightEngine.MAX_LEVEL, ((LevelCube) cubeAccess).cc_lightData().skyLight(above));
         }
     }
 
     /**
-     * A torch carved into generated stone lights the air beside it, a stone block stops that light, and both values survive save/reload.
+     * A torch carved into generated stone lights the air beside it, a solid block stops that light, and both values survive save/reload.
      */
     @Test
     public void torchInSolidCubeCastsLightAndSurvivesReload() throws Exception {
         Path dimensionPath = Files.createTempDirectory("cc_cube_light");
-        BlockPos torch = new BlockPos(26, 10, 31);
-        BlockPos beside = new BlockPos(27, 10, 31);
-        BlockPos wall = new BlockPos(28, 10, 31);
-        BlockPos behind = new BlockPos(29, 10, 31);
+        BlockPos torch = findSolidRun(CubicOverworldGenerator.DEFAULT_SEED);
+        BlockPos beside = torch.offset(1, 0, 0);
+        BlockPos wall = torch.offset(2, 0, 0);
+        BlockPos behind = torch.offset(3, 0, 0);
         int emission = Blocks.TORCH.defaultBlockState().getLightEmission();
         try (var firstRef = createServerChunkCache(false, dimensionPath)) {
             ServerChunkCache cache = firstRef.value();
             try {
                 var cube = ((ServerCubeCache) cache).cc_getCube(0, 0, 0, ChunkStatus.FULL, true);
                 assertInstanceOf(LevelCube.class, cube);
-                assertEquals(Blocks.SMOOTH_STONE.defaultBlockState(), cube.getBlockState(torch));
-                assertEquals(Blocks.SMOOTH_STONE.defaultBlockState(), cube.getBlockState(behind));
+                assertEquals(15, cube.getBlockState(torch).getLightBlock());
+                assertEquals(15, cube.getBlockState(wall).getLightBlock());
+                assertEquals(15, cube.getBlockState(behind).getLightBlock());
                 cube.setBlockState(torch, Blocks.AIR.defaultBlockState(), 0);
                 cube.setBlockState(beside, Blocks.AIR.defaultBlockState(), 0);
                 cube.setBlockState(behind, Blocks.AIR.defaultBlockState(), 0);
@@ -494,22 +499,27 @@ public class IntegrationTestServerCubeCache extends BaseTest {
     }
 
     /**
-     * A block that generation would leave as air must still be there after {@link ServerChunkCache#save} and a new cache on the same directory.
-     * The neighboring generated stone block must still be stone, so the reload is the saved cube and not a fresh fill of an empty file.
+     * A block edited after generation must still be there after {@link ServerChunkCache#save} and a new cache on the same directory.
+     * The neighboring generated block must be unchanged, so the reload is the saved cube and not a fresh fill of an empty file.
      */
     @Test
     public void cubeBlocksSurviveSaveAndReload() throws Exception {
         Path dimensionPath = Files.createTempDirectory("cc_cube_save");
-        // (31, 21, 31) is air above the sinusoid, in the same section as generated stone at (31, 20, 31).
-        BlockPos placed = new BlockPos(31, 21, 31);
-        BlockPos generated = new BlockPos(31, 20, 31);
+        BlockPos placed = findSolidRun(CubicOverworldGenerator.DEFAULT_SEED);
+        BlockPos generated = placed.offset(1, 0, 0);
+        assertEquals(placed.getX() >> 4, generated.getX() >> 4);
+        assertEquals(placed.getY() >> 4, generated.getY() >> 4);
+        assertEquals(placed.getZ() >> 4, generated.getZ() >> 4);
         try (var firstRef = createServerChunkCache(false, dimensionPath)) {
             ServerChunkCache cache = firstRef.value();
             try {
                 var cube = ((ServerCubeCache) cache).cc_getCube(0, 0, 0, ChunkStatus.FULL, true);
                 assertInstanceOf(LevelCube.class, cube);
-                assertEquals(Blocks.AIR.defaultBlockState(), cube.getBlockState(placed));
-                assertEquals(Blocks.SMOOTH_STONE.defaultBlockState(), cube.getBlockState(generated));
+                BlockState kept = cube.getBlockState(generated);
+                assertEquals(CubicOverworldGenerator.blockState(CubicOverworldGenerator.DEFAULT_SEED, generated.getX(), generated.getY(),
+                        generated.getZ()), kept);
+                assertEquals(15, cube.getBlockState(placed).getLightBlock());
+                assertEquals(15, kept.getLightBlock());
                 cube.setBlockState(placed, Blocks.DIAMOND_BLOCK.defaultBlockState(), 0);
                 assertEquals(Blocks.DIAMOND_BLOCK.defaultBlockState(), cube.getBlockState(placed));
                 cache.save(true);
@@ -523,11 +533,109 @@ public class IntegrationTestServerCubeCache extends BaseTest {
                 var cube = ((ServerCubeCache) cache).cc_getCube(0, 0, 0, ChunkStatus.FULL, true);
                 assertInstanceOf(LevelCube.class, cube);
                 assertEquals(Blocks.DIAMOND_BLOCK.defaultBlockState(), cube.getBlockState(placed));
-                assertEquals(Blocks.SMOOTH_STONE.defaultBlockState(), cube.getBlockState(generated));
+                assertEquals(CubicOverworldGenerator.blockState(CubicOverworldGenerator.DEFAULT_SEED, generated.getX(), generated.getY(),
+                        generated.getZ()), cube.getBlockState(generated));
             } finally {
                 cache.chunkMap.close();
             }
         }
+    }
+
+    private static BlockPos findOpenGrass(long seed) {
+        for (int x = -128; x <= 128; x++) {
+            for (int z = -128; z <= 128; z++) {
+                BlockPos grass = openGrassAt(seed, x, z);
+                if (grass != null) {
+                    return grass;
+                }
+            }
+        }
+        throw new AssertionError("no open grass column");
+    }
+
+    private static BlockPos openGrassAt(long seed, int x, int z) {
+        if (CubicOverworldGenerator.biomeAt(seed, x, z) != SurfaceBiome.PLAINS) {
+            return null;
+        }
+        int surface = CubicOverworldGenerator.surfaceY(seed, x, z);
+        if (surface < CubicOverworldGenerator.SEA_LEVEL) {
+            return null;
+        }
+        for (int y = surface - 2; y <= surface + 12; y++) {
+            if (!CubicOverworldGenerator.blockState(seed, x, y, z).is(Blocks.GRASS_BLOCK)) {
+                continue;
+            }
+            CubePos cube = CubePos.from(x, y, z);
+            if (y - 4 < cube.minCubeY() || y + 1 > cube.maxCubeY()) {
+                continue;
+            }
+            if (!openToCubeTop(seed, x, z, y + 1, cube.maxCubeY())) {
+                continue;
+            }
+            if (!CubicOverworldGenerator.blockState(seed, x, y - 1, z).is(Blocks.DIRT)) {
+                continue;
+            }
+            if (CubicOverworldGenerator.blockState(seed, x, y - 4, z).getLightBlock() != 15) {
+                continue;
+            }
+            return new BlockPos(x, y, z);
+        }
+        return null;
+    }
+
+    private static boolean openToCubeTop(long seed, int x, int z, int fromY, int maxY) {
+        for (int y = fromY; y <= maxY; y++) {
+            if (!CubicOverworldGenerator.blockState(seed, x, y, z).isAir()) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** Four adjacent full blocks inside cube {@code (0,0,0)}, in one section, so a torch test can carve a gap. */
+    private static BlockPos findSolidRun(long seed) {
+        CubePos origin = CubePos.of(0, 0, 0);
+        int diameter = CubicConstants.DIAMETER_IN_BLOCKS;
+        for (int y = 0; y < diameter; y++) {
+            for (int z = 0; z < diameter; z++) {
+                for (int x = 0; x < diameter - 3; x++) {
+                    BlockPos start = origin.asBlockPos(x, y, z);
+                    if (((start.getX() + 3) >> 4) != (start.getX() >> 4)) {
+                        continue;
+                    }
+                    if (solidRun(seed, start)) {
+                        return start;
+                    }
+                }
+            }
+        }
+        throw new AssertionError("no solid run in cube (0,0,0)");
+    }
+
+    private static boolean solidRun(long seed, BlockPos start) {
+        for (int dx = 0; dx < 4; dx++) {
+            BlockState state = CubicOverworldGenerator.blockState(seed, start.getX() + dx, start.getY(), start.getZ());
+            if (state.getLightBlock() != 15) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static int countBedrock(LevelCube cube) {
+        CubePos pos = cube.cc_getCubePos();
+        int found = 0;
+        int diameter = CubicConstants.DIAMETER_IN_BLOCKS;
+        for (int x = 0; x < diameter; x++) {
+            for (int y = 0; y < diameter; y++) {
+                for (int z = 0; z < diameter; z++) {
+                    if (cube.getBlockState(pos.asBlockPos(x, y, z)).is(Blocks.BEDROCK)) {
+                        found++;
+                    }
+                }
+            }
+        }
+        return found;
     }
 
     @Test
