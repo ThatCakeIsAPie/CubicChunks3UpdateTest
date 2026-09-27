@@ -19,6 +19,7 @@ import io.github.opencubicchunks.cc_core.world.level.CloPos;
 import io.github.opencubicchunks.cubicchunks.CubicChunks;
 import io.github.opencubicchunks.cubicchunks.mixin.dasmsets.ChunkToCubeSet;
 import io.github.opencubicchunks.cubicchunks.world.level.chunklike.CloAccess;
+import io.github.opencubicchunks.cubicchunks.world.lighting.CubeLightData;
 import it.unimi.dsi.fastutil.longs.LongSet;
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.shorts.ShortList;
@@ -77,6 +78,7 @@ public abstract class CubeAccess implements CloAccess {
     protected final Map<BlockPos, BlockEntity> blockEntities = new Object2ObjectOpenHashMap<>();
     protected final LevelHeightAccessor levelHeightAccessor;
     protected final LevelChunkSection[] sections;
+    private final CubeLightData cc_lightData;
 
     // Constructor signature matches ChunkAccess for DASM redirect purposes
     public CubeAccess(
@@ -101,6 +103,11 @@ public abstract class CubeAccess implements CloAccess {
         }
 
         replaceMissingSections(biomeRegistry, this.sections);
+        this.cc_lightData = new CubeLightData();
+    }
+
+    public CubeLightData cc_lightData() {
+        return this.cc_lightData;
     }
 
     private static void replaceMissingSections(Registry<Biome> biomeRegistry, LevelChunkSection[] sections) {

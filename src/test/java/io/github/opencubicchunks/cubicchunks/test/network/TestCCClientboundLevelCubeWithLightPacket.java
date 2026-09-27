@@ -38,6 +38,9 @@ public class TestCCClientboundLevelCubeWithLightPacket extends BaseTest {
         var pos2 = CubePos.of(0, -2, 4);
         var cube1 = new LevelCube(clientLevelMock, pos1);
         var cube2 = generateRandomLevelCube(clientLevelMock, pos2, new Random(3333));
+        // pos2 is cube (0, -2, 4): min block is (0, -64, 128). Non-zero light must survive the packet.
+        cube2.cc_lightData().setBlockLight(0, -64, 128, 11);
+        cube2.cc_lightData().setSkyLight(1, -63, 129, 7);
 
         var packet1 = new CCClientboundLevelCubeWithLightPacket(cube1);
         var packet2 = new CCClientboundLevelCubeWithLightPacket(cube2);

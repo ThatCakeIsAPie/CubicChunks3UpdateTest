@@ -4,6 +4,7 @@ import io.github.opencubicchunks.cc_core.utils.Coords;
 import io.github.opencubicchunks.cubicchunks.CanBeCubic;
 import io.github.opencubicchunks.cubicchunks.mixin.access.client.SectionRenderDispatcherAccess;
 import io.github.opencubicchunks.cubicchunks.world.level.CubicLevel;
+import io.github.opencubicchunks.cubicchunks.world.level.cube.CubeAccess;
 import net.minecraft.client.renderer.chunk.SectionRenderDispatcher;
 import net.minecraft.core.SectionPos;
 import net.minecraft.world.level.chunk.LevelChunkSection;
@@ -31,11 +32,11 @@ public abstract class MixinSectionRenderDispatcher$RenderSection {
         if (!((CanBeCubic) ((SectionRenderDispatcherAccess) this$0).cc_getLevel()).cc_isCubic()) {
             return;
         }
-        // TODO (P2) lighting: also check the cubic equivalent of LevelLightEngine.lightOnInColumn here (see vanilla doesChunkExistAt method) -
-        // sections currently sometimes fail to render due to this missing check
-        cir.setReturnValue(((CubicLevel) ((SectionRenderDispatcherAccess) this$0).cc_getLevel()).cc_getCube(
+        CubeAccess cube = ((CubicLevel) ((SectionRenderDispatcherAccess) this$0).cc_getLevel()).cc_getCube(
                 Coords.sectionToCube(SectionPos.x(sectionPosLong)), Coords.sectionToCube(SectionPos.y(sectionPosLong)),
-                Coords.sectionToCube(SectionPos.z(sectionPosLong)), ChunkStatus.FULL, false) != null);
+                Coords.sectionToCube(SectionPos.z(sectionPosLong)), ChunkStatus.FULL, false);
+        // Vanilla also requires the column's light to be on. Unlit cubes stay out of the mesh until the cube packet applies light.
+        cir.setReturnValue(cube != null && cube.isLightCorrect());
     }
 
     /**
