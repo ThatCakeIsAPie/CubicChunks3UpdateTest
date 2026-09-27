@@ -81,9 +81,9 @@ public abstract class MixinDistanceManager implements MarkableAsCubic {
     }
 
     /**
-     * The original function expects chunkPos.toLong(), but we need to replace it with cloPos.toLong() instead.
+     * The original function expects chunkPos.pack(), but we need to replace it with cloPos.toLong() instead.
      */
-    @WrapOperation(method = "addPlayer", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/ChunkPos;toLong()J"))
+    @WrapOperation(method = "addPlayer", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/ChunkPos;pack()J"))
     private long cc_replaceTicketTypeOnAddPlayer(ChunkPos chunkPos, Operation<Long> original, SectionPos sectionPos) {
         if (!cc_isCubic) {
             return original.call(chunkPos);
@@ -92,9 +92,9 @@ public abstract class MixinDistanceManager implements MarkableAsCubic {
     }
 
     /**
-     * The original function expects chunkPos.toLong(), but we need to replace it with cloPos.toLong() instead.
+     * The original function expects chunkPos.pack(), but we need to replace it with cloPos.toLong() instead.
      */
-    @WrapOperation(method = "removePlayer", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/ChunkPos;toLong()J"))
+    @WrapOperation(method = "removePlayer", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/ChunkPos;pack()J"))
     private long cc_replaceTicketTypeOnRemovePlayer(ChunkPos chunkPos, Operation<Long> original, SectionPos sectionPos) {
         if (!cc_isCubic) {
             return original.call(chunkPos);

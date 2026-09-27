@@ -23,7 +23,6 @@ import io.github.opencubicchunks.cubicchunks.world.level.cube.CubeSource;
 import io.github.opencubicchunks.cubicchunks.world.level.cube.LevelCube;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.world.DifficultyInstance;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
@@ -46,8 +45,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(Level.class)
 public abstract class MixinLevel implements CubicLevel, MarkableAsCubic, LevelAccessor {
     @Shadow public abstract @Nullable ChunkAccess getChunk(int chunkX, int chunkZ, ChunkStatus requestedStatus, boolean forceLoad);
-
-    @Shadow public abstract long getDayTime();
 
     protected boolean cc_isCubic;
 
@@ -250,20 +247,5 @@ public abstract class MixinLevel implements CubicLevel, MarkableAsCubic, LevelAc
         }
     }
 
-    // getCurrentDifficultyAt
-    // This function isn't worth trying to wrap due to its complexity, so we just replace it entirely
-    // Local difficulty is not something people mod so this is fine
-    @Inject(method = "getCurrentDifficultyAt", at = @At(value = "HEAD"), cancellable = true)
-    private void cc_replaceGetCurrentDifficultyAt(BlockPos blockPos, CallbackInfoReturnable<DifficultyInstance> cir) {
-        if (cc_isCubic) {
-            long i = 0L;
-            float f = 0.0F;
-            if (this.cc_hasCubeAt(blockPos)) {
-                f = this.getMoonBrightness();
-                i = this.cc_getCubeAt(blockPos).getInhabitedTime();
-            }
-            cir.setReturnValue(new DifficultyInstance(this.getDifficulty(), this.getDayTime(), i, f));
-        }
-    }
     // TODO: Phase 3 low priority: Add a method to modify isOutsideSpawnableHeight to respect the limits of the packing for CloPos
 }

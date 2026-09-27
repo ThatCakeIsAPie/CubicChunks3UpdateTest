@@ -49,7 +49,6 @@ import io.github.opencubicchunks.cubicchunks.server.level.CubeHolder;
 import io.github.opencubicchunks.cubicchunks.server.level.CubicChunkMap;
 import io.github.opencubicchunks.cubicchunks.server.level.GeneratingCubeMap;
 import io.github.opencubicchunks.cubicchunks.server.level.GenerationCloHolder;
-import io.github.opencubicchunks.cubicchunks.server.level.progress.CloProgressListener;
 import io.github.opencubicchunks.cubicchunks.util.StaticCache3D;
 import io.github.opencubicchunks.cubicchunks.world.level.chunklike.CloAccess;
 import io.github.opencubicchunks.cubicchunks.world.level.chunklike.LevelClo;
@@ -61,7 +60,7 @@ import io.github.opencubicchunks.cubicchunks.world.level.entity.CloStatusUpdateL
 import it.unimi.dsi.fastutil.longs.Long2ByteMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectLinkedOpenHashMap;
 import net.minecraft.ReportedException;
-import net.minecraft.Util;
+import net.minecraft.util.Util;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.server.level.ChunkGenerationTask;
@@ -72,7 +71,6 @@ import net.minecraft.server.level.FullChunkStatus;
 import net.minecraft.server.level.GenerationChunkHolder;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.server.level.progress.ChunkProgressListener;
 import net.minecraft.server.network.ServerGamePacketListenerImpl;
 import net.minecraft.util.thread.BlockableEventLoop;
 import net.minecraft.world.level.ChunkPos;
@@ -137,9 +135,6 @@ public abstract class MixinChunkMap extends MixinChunkStorage implements Generat
         throw new IllegalStateException();
     }
 
-    // TODO this one being on GlobalSet is a bit jank
-    @AddFieldToSets(containers = GlobalSet.ChunkMap_redirects.class, field = "progressListener:Lnet/minecraft/server/level/progress/ChunkProgressListener;")
-    private CloProgressListener cc_progressListener;
     @AddFieldToSets(containers = ChunkToCloSet.ChunkMap_redirects.class, field = "chunkStatusListener:Lnet/minecraft/world/level/entity/ChunkStatusUpdateListener;")
     private CloStatusUpdateListener cc_cloStatusListener;
 
@@ -148,13 +143,11 @@ public abstract class MixinChunkMap extends MixinChunkStorage implements Generat
     private void cc_onInit(
             ServerLevel level, LevelStorageSource.LevelStorageAccess levelStorageAccess, DataFixer fixerUpper,
             StructureTemplateManager structureManager, Executor dispatcher, BlockableEventLoop mainThreadExecutor, LightChunkGetter lightChunk,
-            ChunkGenerator generator, ChunkProgressListener progressListener, ChunkStatusUpdateListener chunkStatusListener,
-            Supplier overworldDataStorage, TicketStorage ticketStorage, int serverViewDistance, boolean sync, CallbackInfo ci
+            ChunkGenerator generator, ChunkStatusUpdateListener chunkStatusListener, Supplier overworldDataStorage, TicketStorage ticketStorage,
+            int serverViewDistance, boolean sync, CallbackInfo ci
     ) {
         if (((CanBeCubic) level).cc_isCubic()) {
-            cc_progressListener = ((CloProgressListener) progressListener);
-            // TODO P2 (entities): actually pass in a cloStatusListener - since ChunkStatusUpdateListener is passed as a parameter, not sure what the
-            // best approach is without making our own constructor
+            // 26.1 dropped ChunkProgressListener. Per-column load status is read from ChunkMap; cube statuses are not stored on a listener.
             cc_cloStatusListener = (cloPos, fullChunkStatus) -> {};
             ((MarkableAsCubic) distanceManager).cc_setCubic();
         }

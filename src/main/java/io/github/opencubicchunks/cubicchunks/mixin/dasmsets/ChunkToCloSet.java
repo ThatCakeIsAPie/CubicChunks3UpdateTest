@@ -22,7 +22,6 @@ import io.github.opencubicchunks.cubicchunks.world.level.chunklike.ImposterProto
 import io.github.opencubicchunks.cubicchunks.world.level.chunklike.LevelClo;
 import io.github.opencubicchunks.cubicchunks.world.level.chunklike.ProtoClo;
 import io.github.opencubicchunks.cubicchunks.world.level.cube.LevelCube;
-import net.minecraft.core.Registry;
 import net.minecraft.server.level.ChunkGenerationTask;
 import net.minecraft.server.level.ChunkHolder;
 import net.minecraft.server.level.ChunkMap;
@@ -34,25 +33,22 @@ import net.minecraft.server.level.ServerChunkCache;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.level.SimulationChunkTracker;
-import net.minecraft.server.level.progress.LoggerChunkProgressListener;
-import net.minecraft.server.level.progress.ProcessorChunkProgressListener;
-import net.minecraft.server.level.progress.StoringChunkProgressListener;
 import net.minecraft.server.network.PlayerChunkSender;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LevelHeightAccessor;
 import net.minecraft.world.level.TicketStorage;
-import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.chunk.ImposterProtoChunk;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.LevelChunkSection;
+import net.minecraft.world.level.chunk.PalettedContainerFactory;
 import net.minecraft.world.level.chunk.ProtoChunk;
 import net.minecraft.world.level.chunk.UpgradeData;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
-import net.minecraft.world.level.chunk.storage.ChunkStorage;
+import net.minecraft.world.level.chunk.storage.SimpleRegionStorage;
 import net.minecraft.world.level.levelgen.blending.BlendingData;
 import net.minecraft.world.level.material.Fluid;
 import net.minecraft.world.ticks.LevelChunkTicks;
@@ -78,20 +74,22 @@ public interface ChunkToCloSet extends GlobalSet {
         @FieldRedirect("INVALID_CHUNK_POS:J")
         static final long INVALID_CLO_POS = Long.MAX_VALUE;
 
-        @FieldToMethodRedirect("x:I")
+        // 26.1 ChunkPos is a record; x/z are accessors, not public fields.
+        @MethodRedirect("x()I")
         native int getX();
 
-        @FieldToMethodRedirect("z:I")
+        @MethodRedirect("z()I")
         native int getZ();
 
-        // Note that this relies on ChunkPos and CloPos encoding to longs in the same way
-        @ConstructorToFactoryRedirect("<init>(J)V")
+        // 26.1: ChunkPos.unpack replaces new ChunkPos(long). Encoding matches CloPos.fromLong.
+        @MethodRedirect("unpack(J)Lnet/minecraft/world/level/ChunkPos;")
         static native CloPos fromLong(long cloPos);
 
         @ConstructorToFactoryRedirect("<init>(II)V")
         static native CloPos chunk(int x, int z);
 
-        @MethodRedirect("asLong(II)J")
+        // 26.1: ChunkPos.asLong(int, int) was renamed to pack.
+        @MethodRedirect("pack(II)J")
         static native long chunkAsLong(int x, int z);
     }
 
@@ -134,11 +132,12 @@ public interface ChunkToCloSet extends GlobalSet {
 
     @TypeRedirect(from = @Ref(ProtoChunk.class), to = @Ref(ProtoClo.class))
     interface ProtoChunk_to_ProtoClo_redirects extends ChunkAccess_to_CloAccess_redirects {
+        // 26.1 ProtoChunk takes PalettedContainerFactory instead of Registry<Biome>.
         @ConstructorToFactoryRedirect("<init>(Lnet/minecraft/world/level/ChunkPos;Lnet/minecraft/world/level/chunk/UpgradeData;"
-                + "Lnet/minecraft/world/level/LevelHeightAccessor;Lnet/minecraft/core/Registry;"
+                + "Lnet/minecraft/world/level/LevelHeightAccessor;Lnet/minecraft/world/level/chunk/PalettedContainerFactory;"
                 + "Lnet/minecraft/world/level/levelgen/blending/BlendingData;)V")
         static ProtoClo create(
-                CloPos cloPos, UpgradeData upgradeData, LevelHeightAccessor levelHeightAccessor, Registry<Biome> biomeRegistry,
+                CloPos cloPos, UpgradeData upgradeData, LevelHeightAccessor levelHeightAccessor, PalettedContainerFactory containerFactory,
                 @Nullable BlendingData blendingData
         ) {
             throw new DasmFailedToApply();
@@ -146,11 +145,12 @@ public interface ChunkToCloSet extends GlobalSet {
 
         @ConstructorToFactoryRedirect("<init>(Lnet/minecraft/world/level/ChunkPos;Lnet/minecraft/world/level/chunk/UpgradeData;"
                 + "[Lnet/minecraft/world/level/chunk/LevelChunkSection;Lnet/minecraft/world/ticks/ProtoChunkTicks;"
-                + "Lnet/minecraft/world/ticks/ProtoChunkTicks;Lnet/minecraft/world/level/LevelHeightAccessor;Lnet/minecraft/core/Registry;"
+                + "Lnet/minecraft/world/ticks/ProtoChunkTicks;Lnet/minecraft/world/level/LevelHeightAccessor;"
+                + "Lnet/minecraft/world/level/chunk/PalettedContainerFactory;"
                 + "Lnet/minecraft/world/level/levelgen/blending/BlendingData;)V")
         static ProtoClo create(
                 CloPos cloPos, UpgradeData upgradeData, @Nullable LevelChunkSection[] sections, ProtoChunkTicks<Block> blockTicks,
-                ProtoChunkTicks<Fluid> liquidTicks, LevelHeightAccessor levelHeightAccessor, Registry<Biome> biomeRegistry,
+                ProtoChunkTicks<Fluid> liquidTicks, LevelHeightAccessor levelHeightAccessor, PalettedContainerFactory containerFactory,
                 @Nullable BlendingData blendingData
         ) {
             throw new DasmFailedToApply();
@@ -207,16 +207,13 @@ public interface ChunkToCloSet extends GlobalSet {
     @IntraOwnerContainer(@Ref(ChunkHolder.class))
     class ChunkHolder_redirects extends GenerationChunkHolder_redirects {}
 
-    @IntraOwnerContainer(@Ref(ProcessorChunkProgressListener.class))
-    class ProcessorChunkProgressListener_redirects {}
-
     @IntraOwnerContainer(@Ref(ChunkGenerationTask.class))
     class ChunkGenerationTask_redirects {}
 
     @IntraOwnerContainer(@Ref(GenerationChunkHolder.class))
     class GenerationChunkHolder_redirects {}
 
-    @IntraOwnerContainer(@Ref(ChunkStorage.class))
+    @IntraOwnerContainer(@Ref(SimpleRegionStorage.class))
     class ChunkStorage_redirects {}
 
     @IntraOwnerContainer(@Ref(ChunkMap.class))
@@ -254,12 +251,6 @@ public interface ChunkToCloSet extends GlobalSet {
 
     @IntraOwnerContainer(@Ref(SimulationChunkTracker.class))
     class SimulationChunkTracker_redirects {}
-
-    @IntraOwnerContainer(@Ref(LoggerChunkProgressListener.class))
-    class LoggerChunkProgressListener_redirects {}
-
-    @IntraOwnerContainer(@Ref(StoringChunkProgressListener.class))
-    class StoringChunkProgressListener_redirects {}
 
     @IntraOwnerContainer(@Ref(TicketStorage.class))
     class TicketStorage_redirects {}

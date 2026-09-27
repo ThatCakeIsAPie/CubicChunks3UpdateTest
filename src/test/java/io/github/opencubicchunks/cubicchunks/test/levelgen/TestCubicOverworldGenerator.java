@@ -48,7 +48,7 @@ public class TestCubicOverworldGenerator extends BaseTest {
         assertEquals(Blocks.AIR.defaultBlockState(), CubicOverworldGenerator.blockState(SEED, grass.getX(), grass.getY() + 1, grass.getZ()));
         assertEquals(Blocks.DIRT.defaultBlockState(), CubicOverworldGenerator.blockState(SEED, grass.getX(), grass.getY() - 1, grass.getZ()));
         BlockState buried = CubicOverworldGenerator.blockState(SEED, grass.getX(), grass.getY() - 4, grass.getZ());
-        assertTrue(buried.getLightBlock() == 15, grass::toShortString);
+        assertTrue(buried.getLightDampening() == 15, grass::toShortString);
         assertNotEquals(Blocks.SMOOTH_STONE.defaultBlockState(), buried);
         assertNotEquals(Blocks.BEDROCK.defaultBlockState(), buried);
 
@@ -214,7 +214,7 @@ public class TestCubicOverworldGenerator extends BaseTest {
             if (!CubicOverworldGenerator.blockState(SEED, x, y - 1, z).equals(under)) {
                 continue;
             }
-            if (CubicOverworldGenerator.blockState(SEED, x, y - 4, z).getLightBlock() != 15) {
+            if (CubicOverworldGenerator.blockState(SEED, x, y - 4, z).getLightDampening() != 15) {
                 continue;
             }
             return new BlockPos(x, y, z);

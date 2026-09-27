@@ -30,7 +30,7 @@ public abstract class MixinPlayerTicketTracker extends MixinFixedPlayerDistanceC
         if (!cc_isCubic) {
             return true;
         }
-        ((CloTaskDispatcher) ((DistanceManagerAccess) this$0).cc_ticketDispatcher()).cc_onLevelChange(CloPos.fromLong(chunkPos.toLong()), intSupplier,
+        ((CloTaskDispatcher) ((DistanceManagerAccess) this$0).cc_ticketDispatcher()).cc_onLevelChange(CloPos.fromLong(chunkPos.pack()), intSupplier,
                 i, intConsumer);
         return false;
     }

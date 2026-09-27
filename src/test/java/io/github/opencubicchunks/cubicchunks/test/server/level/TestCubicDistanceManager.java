@@ -67,7 +67,7 @@ public class TestCubicDistanceManager extends BaseTest {
     private DistanceManager setupDistanceManager(TicketStorage ticketStorage) {
         var mainThread = Thread.currentThread();
         var mainThreadExecutor = // Based on ServerChunkCache.MainThreadExecutor
-                new BlockableEventLoop<>("test_event_loop") {
+                new BlockableEventLoop<Runnable>("test_event_loop", false) {
                     @Override public Runnable wrapRunnable(Runnable runnable) {
                         return runnable;
                     }
@@ -96,7 +96,7 @@ public class TestCubicDistanceManager extends BaseTest {
         DistanceManager distanceManager = setupDistanceManager(ticketStorage);
         ticketStorage.updateChunkForced(ChunkPos.ZERO, true);
         distanceManager.runAllUpdates(mock(ChunkMap.class));
-        assertTrue(distanceManager.inEntityTickingRange(ChunkPos.ZERO.toLong()), "ChunkPos.ZERO is not in entity ticking range");
+        assertTrue(distanceManager.inEntityTickingRange(ChunkPos.ZERO.pack()), "ChunkPos.ZERO is not in entity ticking range");
     }
 
     @Test
@@ -120,8 +120,8 @@ public class TestCubicDistanceManager extends BaseTest {
         }
 
         for (ServerPlayerAndPosition player : players) {
-            assertEquals(TriState.TRUE, distanceManager.hasPlayersNearby(player.pos.chunk().toLong()),
-                    player.pos.chunk().toLong() + " has no players nearby");
+            assertEquals(TriState.TRUE, distanceManager.hasPlayersNearby(player.pos.chunk().pack()),
+                    player.pos.chunk().pack() + " has no players nearby");
         }
     }
 
@@ -141,8 +141,8 @@ public class TestCubicDistanceManager extends BaseTest {
         }
 
         for (ServerPlayerAndPosition player : players) {
-            assertEquals(TriState.TRUE, distanceManager.hasPlayersNearby(player.pos.chunk().toLong()),
-                    player.pos.chunk().toLong() + " has no players nearby");
+            assertEquals(TriState.TRUE, distanceManager.hasPlayersNearby(player.pos.chunk().pack()),
+                    player.pos.chunk().pack() + " has no players nearby");
         }
     }
 
@@ -239,13 +239,13 @@ public class TestCubicDistanceManager extends BaseTest {
     public void testAddRemoveTicketsVanilla() {
         var ticketStorage = new TicketStorage();
         var distanceManager = setupDistanceManager(ticketStorage);
-        ticketStorage.addTicket(new Ticket(TicketType.START, 0), new ChunkPos(0, 0));
+        ticketStorage.addTicket(new Ticket(TicketType.FORCED, 0), new ChunkPos(0, 0));
         assertTrue(distanceManager.hasTickets());
-        ticketStorage.removeTicket(new Ticket(TicketType.START, 0), new ChunkPos(0, 0));
+        ticketStorage.removeTicket(new Ticket(TicketType.FORCED, 0), new ChunkPos(0, 0));
         assertFalse(distanceManager.hasTickets());
-        ticketStorage.addTicketWithRadius(TicketType.START, new ChunkPos(0, 0), 5);
+        ticketStorage.addTicketWithRadius(TicketType.FORCED, new ChunkPos(0, 0), 5);
         assertTrue(distanceManager.hasTickets());
-        ticketStorage.removeTicketWithRadius(TicketType.START, new ChunkPos(0, 0), 5);
+        ticketStorage.removeTicketWithRadius(TicketType.FORCED, new ChunkPos(0, 0), 5);
         assertFalse(distanceManager.hasTickets());
     }
 
@@ -254,13 +254,13 @@ public class TestCubicDistanceManager extends BaseTest {
         var ticketStorage = new TicketStorage();
         var distanceManager = setupDistanceManager(ticketStorage);
         ((MarkableAsCubic) distanceManager).cc_setCubic();
-        ((CubicTicketStorage) ticketStorage).cc_addTicket(new Ticket(TicketType.START, 0), CloPos.cube(0, 0, 0));
+        ((CubicTicketStorage) ticketStorage).cc_addTicket(new Ticket(TicketType.FORCED, 0), CloPos.cube(0, 0, 0));
         assertTrue(distanceManager.hasTickets());
-        ((CubicTicketStorage) ticketStorage).cc_removeTicket(new Ticket(TicketType.START, 0), CloPos.cube(0, 0, 0));
+        ((CubicTicketStorage) ticketStorage).cc_removeTicket(new Ticket(TicketType.FORCED, 0), CloPos.cube(0, 0, 0));
         assertFalse(distanceManager.hasTickets());
-        ((CubicTicketStorage) ticketStorage).cc_addTicketWithRadius(TicketType.START, CloPos.cube(0, 0, 0), 5);
+        ((CubicTicketStorage) ticketStorage).cc_addTicketWithRadius(TicketType.FORCED, CloPos.cube(0, 0, 0), 5);
         assertTrue(distanceManager.hasTickets());
-        ((CubicTicketStorage) ticketStorage).cc_removeTicketWithRadius(TicketType.START, CloPos.cube(0, 0, 0), 5);
+        ((CubicTicketStorage) ticketStorage).cc_removeTicketWithRadius(TicketType.FORCED, CloPos.cube(0, 0, 0), 5);
         assertFalse(distanceManager.hasTickets());
     }
 

@@ -8,33 +8,29 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.math.Axis;
 import io.github.opencubicchunks.cc_core.api.CubicConstants;
-import io.github.opencubicchunks.cc_core.utils.Coords;
 import io.github.opencubicchunks.cubicchunks.client.gui.render.state.pip.WorldLoadingCubeStatusesRenderState;
 import io.github.opencubicchunks.cubicchunks.client.gui.screens.CubicLevelLoadingScreen;
-import io.github.opencubicchunks.cubicchunks.server.level.progress.StoringCloProgressListener;
 import net.minecraft.client.gui.render.pip.PictureInPictureRenderer;
-import net.minecraft.client.renderer.CachedPerspectiveProjectionMatrixBuffer;
 import net.minecraft.client.renderer.MultiBufferSource;
-import net.minecraft.client.renderer.RenderPipelines;
-import net.minecraft.client.renderer.RenderType;
+import net.minecraft.client.renderer.Projection;
+import net.minecraft.client.renderer.ProjectionMatrixBuffer;
+import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.core.Direction;
-import net.minecraft.server.level.progress.StoringChunkProgressListener;
+import net.minecraft.server.level.progress.ChunkLoadStatusView;
 import net.minecraft.util.ARGB;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
 import org.joml.Vector3f;
 
 /**
- * Picture-in-Picture renderer used to render the 3d loading animation used when loading into a cubic world.
+ * Picture-in-Picture renderer used to render the loading animation used when loading into a cubic world.
+ * <p>
+ * 26.1 only exposes column status through {@link ChunkLoadStatusView}. Cube faces are not drawn; that needs a cube status
+ * store (Phase 6b) and is not a Vulkan rewrite.
  */
 public class WorldLoadingCubeStatusesRenderer extends PictureInPictureRenderer<WorldLoadingCubeStatusesRenderState> {
-    // "I want to essentially get rid of RenderType as a concept" - Dinnerbone
-    // so this will probably be obsolete soon
-    public static final RenderType WORLD_LOADING_CUBE_STATUSES = RenderType.create("cubicchunks_loading_cube_statuses",
-            RenderType.TRANSIENT_BUFFER_SIZE, false, true, RenderPipelines.GUI, RenderType.CompositeState.builder().createCompositeState(false));
-
-    // PictureInPictureRenderer defaults to an orthographic projection matrix, so we make our own perspective projection matrix
-    private final CachedPerspectiveProjectionMatrixBuffer perspectiveProjectionMatrixBuffer = new CachedPerspectiveProjectionMatrixBuffer(
-            "world loading cubes", 0.05F, 100F);
+    // PictureInPictureRenderer sets an orthographic projection before renderToTexture. This replaces it with perspective.
+    private final Projection projection = new Projection();
+    private final ProjectionMatrixBuffer perspectiveProjectionMatrixBuffer = new ProjectionMatrixBuffer("world loading cubes");
 
     private static final float FOV_DEGREES = 60F;
 
@@ -79,7 +75,8 @@ public class WorldLoadingCubeStatusesRenderer extends PictureInPictureRenderer<W
     @Override protected void renderToTexture(WorldLoadingCubeStatusesRenderState state, PoseStack poseStackUnused) {
         int width = state.x1() - state.x0();
         int height = state.y1() - state.y0();
-        RenderSystem.setProjectionMatrix(perspectiveProjectionMatrixBuffer.getBuffer(width, height, FOV_DEGREES), ProjectionType.PERSPECTIVE);
+        this.projection.setupPerspective(0.05F, 100F, FOV_DEGREES, width, height);
+        RenderSystem.setProjectionMatrix(this.perspectiveProjectionMatrixBuffer.getBuffer(this.projection), ProjectionType.PERSPECTIVE);
 
         // The PoseStack passed to this method is set up for the orthographic projection matrix;
         // as we're using perspective projection instead, we set up our own PoseStack.
@@ -88,8 +85,8 @@ public class WorldLoadingCubeStatusesRenderer extends PictureInPictureRenderer<W
         poseStack.translate(0f, 0f, -CAMERA_DISTANCE);
         poseStack.rotateAround(Axis.XP.rotationDegrees(X_ROTATION_DEGREES), 0.0F, 0.0F, 0.0F);
         poseStack.rotateAround(Axis.YP.rotationDegrees(yRotationAngleDegrees(System.currentTimeMillis())), 0.0F, 0.0F, 0.0F);
-        var vertexConsumer = this.bufferSource.getBuffer(WORLD_LOADING_CUBE_STATUSES);
-        renderCubesAndChunks(vertexConsumer, poseStack, state.chunkProgressListener(), state.scale());
+        var vertexConsumer = this.bufferSource.getBuffer(RenderTypes.debugQuads());
+        renderColumns(vertexConsumer, poseStack, state.chunkLoadStatusView(), state.scale());
         this.bufferSource.endBatch();
     }
 
@@ -97,59 +94,19 @@ public class WorldLoadingCubeStatusesRenderer extends PictureInPictureRenderer<W
         return "world loading cube statuses";
     }
 
-    private static void renderCubesAndChunks(
-            VertexConsumer vertexConsumer, PoseStack poseStack, StoringChunkProgressListener progressListener, float scale
-    ) {
-        int sectionRenderRadius = progressListener.getDiameter();
-        drawChunks(vertexConsumer, poseStack, progressListener, scale, sectionRenderRadius);
-        drawCubes(vertexConsumer, poseStack, progressListener, scale, Coords.sectionToCubeCeil(sectionRenderRadius));
-
-    }
-
-    private static void drawChunks(
-            VertexConsumer vertexConsumer, PoseStack poseStack, StoringChunkProgressListener progressListener, float scale, int sectionRenderRadius
-    ) {
-        for (int cdx = 0; cdx < sectionRenderRadius; cdx++) {
-            for (int cdz = 0; cdz < sectionRenderRadius; cdz++) {
-                ChunkStatus columnStatus = progressListener.getStatus(cdx, cdz);
+    private static void renderColumns(VertexConsumer vertexConsumer, PoseStack poseStack, ChunkLoadStatusView statusView, float scale) {
+        int diameter = statusView.radius() * 2 + 1;
+        for (int cdx = 0; cdx < diameter; cdx++) {
+            for (int cdz = 0; cdz < diameter; cdz++) {
+                ChunkStatus columnStatus = statusView.get(cdx, cdz);
                 if (columnStatus == null) {
                     continue;
                 }
                 int color = ARGB.color(CHUNK_ALPHA,
                         CubicLevelLoadingScreen.STATUS_COLORS.getOrDefault(columnStatus, CubicLevelLoadingScreen.DEFAULT_STATUS_COLOR));
-                // We render the chunks underneath the cubes by rendering a smaller cube with only the top face visible
-                drawCube(vertexConsumer, poseStack, cdx - (float) sectionRenderRadius / 2, CHUNK_Y_OFFSET, cdz - (float) sectionRenderRadius / 2,
+                // Column slabs stand in for the old cube volume. Per-cube faces need a status store 26.1 removed.
+                drawCube(vertexConsumer, poseStack, cdx - (float) diameter / 2, CHUNK_Y_OFFSET, cdz - (float) diameter / 2,
                         CUBE_BASE_SCALE * scale / CubicConstants.DIAMETER_IN_SECTIONS, color, EnumSet.of(Direction.UP));
-            }
-        }
-    }
-
-    private static void drawCubes(
-            VertexConsumer vertexConsumer, PoseStack poseStack, StoringChunkProgressListener progressListener, float scale, int cubeRenderRadius
-    ) {
-        EnumSet<Direction> renderFaces = EnumSet.noneOf(Direction.class);
-
-        var tracker = (StoringCloProgressListener) progressListener;
-        for (int dx = -1; dx <= cubeRenderRadius + 1; dx++) {
-            for (int dz = -1; dz <= cubeRenderRadius + 1; dz++) {
-                for (int dy = -1; dy <= cubeRenderRadius + 1; dy++) {
-                    ChunkStatus status = tracker.cc_getStatus(dx, dy, dz);
-                    if (status == null) {
-                        continue;
-                    }
-                    renderFaces.clear();
-                    float alpha = CubicLevelLoadingScreen.STATUS_ALPHAS.getValue(status.getIndex());
-                    int color = ARGB.color(alpha,
-                            CubicLevelLoadingScreen.STATUS_COLORS.getOrDefault(status, CubicLevelLoadingScreen.DEFAULT_STATUS_COLOR));
-                    for (Direction value : Direction.values()) {
-                        ChunkStatus cubeStatus = tracker.cc_getStatus(dx + value.getStepX(), dy + value.getStepY(), dz + value.getStepZ());
-                        if (cubeStatus == null || !cubeStatus.isOrAfter(status)) {
-                            renderFaces.add(value);
-                        }
-                    }
-                    drawCube(vertexConsumer, poseStack, dx - (float) cubeRenderRadius / 2, dy - (float) cubeRenderRadius / 2,
-                            dz - (float) cubeRenderRadius / 2, CUBE_BASE_SCALE * scale, color, renderFaces);
-                }
             }
         }
     }

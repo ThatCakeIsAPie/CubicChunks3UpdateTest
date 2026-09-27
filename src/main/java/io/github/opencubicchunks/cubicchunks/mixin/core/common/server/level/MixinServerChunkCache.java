@@ -44,7 +44,6 @@ import net.minecraft.server.level.ServerChunkCache;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.Ticket;
 import net.minecraft.server.level.TicketType;
-import net.minecraft.server.level.progress.ChunkProgressListener;
 import net.minecraft.util.profiling.ProfilerFiller;
 import net.minecraft.world.entity.MobCategory;
 import net.minecraft.world.level.LightLayer;
@@ -113,7 +112,7 @@ public abstract class MixinServerChunkCache extends MixinChunkSource implements 
     private void cc_onInit(
             ServerLevel level, LevelStorageSource.LevelStorageAccess levelStorageAccess, DataFixer fixerUpper,
             StructureTemplateManager structureManager, Executor dispatcher, ChunkGenerator generator, int viewDistance, int simulationDistance,
-            boolean sync, ChunkProgressListener progressListener, ChunkStatusUpdateListener chunkStatusListener, Supplier overworldDataStorage,
+            boolean sync, ChunkStatusUpdateListener chunkStatusListener, Supplier overworldDataStorage,
             CallbackInfo ci
     ) {
         if (((CanBeCubic) level).cc_isCubic()) {

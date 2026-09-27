@@ -25,7 +25,7 @@ import net.minecraft.world.level.chunk.LevelChunkSection;
  * {@link #SKY_SEARCH_BLOCKS} blocks. Unloaded space on that path counts as open sky, so a ceiling that is not loaded
  * (or is farther than the search) does not cast a shadow. Horizontal sky from a neighbor is copied from that neighbor's
  * stored values when the neighbor has already been lit. Block light is a normal 15-level flood and is occluded by
- * {@link BlockState#getLightBlock()} of 15.
+ * {@link BlockState#getLightDampening()} of 15.
  * <p>
  * Generation lights each cube once. A block change relights that cube and any already-lit cube within
  * {@link #MAX_LEVEL} blocks (plus the column below, within the sky search, when opacity changes). It does not enqueue
@@ -520,6 +520,6 @@ public final class CubicLightEngine {
     }
 
     static int lightBlock(BlockState state) {
-        return state.getLightBlock();
+        return state.getLightDampening();
     }
 }

@@ -9,13 +9,13 @@ import io.netty.buffer.ByteBuf;
 import net.minecraft.client.multiplayer.ClientChunkCache;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 import net.neoforged.neoforge.network.handling.IPayloadHandler;
 
 public record CCClientboundForgetLevelCloPacket(CloPos pos) implements CustomPacketPayload {
     public static final CustomPacketPayload.Type<CCClientboundForgetLevelCloPacket> TYPE = new CustomPacketPayload.Type<>(
-            ResourceLocation.fromNamespaceAndPath(CubicChunks.MODID, "forget_clo"));
+            Identifier.fromNamespaceAndPath(CubicChunks.MODID, "forget_clo"));
 
     public static final StreamCodec<ByteBuf, CCClientboundForgetLevelCloPacket> STREAM_CODEC = StreamCodec.composite(CLO_POS_STREAM_CODEC,
             CCClientboundForgetLevelCloPacket::pos, CCClientboundForgetLevelCloPacket::new);

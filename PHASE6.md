@@ -52,7 +52,7 @@ Jumping those 1.21.x notes into one 26.1 compile is the largest single bump the 
 
 `Jenkinsfile` still requests the Jenkins tool named `jdk17`. Phase 0 only moved GitHub Actions; this PR does the same for JDK 25. A Jenkins controller without a `jdk25` tool label would fail if that string changed.
 
-## What 26.1 breaks (primer, not yet a source inventory)
+## What 26.1 breaks (primer)
 
 From the 26.1 primer and release notes, the breaks that touch this repo’s surface:
 
@@ -68,10 +68,26 @@ Lighting, cube generation, and multiplayer packet semantics from Phases 2–5 st
 
 ## Compile inventory
 
-Filled in after `./gradlew compileJava` / `./gradlew test` on this pin. See the bottom of this file once that run is recorded.
+`./gradlew compileJava` and `./gradlew compileTestJava` both succeed on this pin (Java 25 toolchain, NeoForge 26.1.2.111). The first `compileJava` after the toolchain bump stopped at javac’s 100-error cap (94 unique errors in 26 files). Those were mechanical renames and deleted types, not a lighting or worldgen rewrite.
+
+What the compile fixes actually changed:
+
+- `ResourceLocation` → `Identifier`. `ChunkPos` record: `pack` / `unpack` / `x()` / `z()` / `containing`. `Util` moved to `net.minecraft.util`. `GameRules` moved to `net.minecraft.world.level.gamerules`.
+- `BlockState.getLightBlock()` → `getLightDampening()`. `Level.isClientSide` is now `isClientSide()`.
+- `PalettedContainer.Strategy` is `Strategy`. `ProtoChunk` and `LevelChunkSection` take `PalettedContainerFactory`.
+- `ChunkStorage` is gone. The region-storage mixin targets `SimpleRegionStorage` (`synchronize` replaces `flushWorker`).
+- Chunk progress listeners (`ChunkProgressListener`, `StoringChunkProgressListener`, `ProcessorChunkProgressListener`, `LoggerChunkProgressListener`) are deleted. Their mixins are deleted. `ServerChunkCache` / `ServerLevel` / `ChunkMap` constructors no longer take a listener. `prepareLevels()` is private and takes no listener, so the old `Mth.square(spawnChunkRadius)` cubic diameter wrap is gone.
+- Loading screen: `renderChunks(GuiGraphics, StoringChunkProgressListener, …)` is `extractChunksForRendering(GuiGraphicsExtractor, …, ChunkLoadStatusView)`. Column slabs still draw from `statusView.get(x, z)`. Per-cube faces do not: there is no cube status map. Color-key cube counts stay zero.
+- PiP state moved to `net.minecraft.client.renderer.state.gui.pip.PictureInPictureRenderState`. The custom `RenderType.create(CompositeState)` is gone; the loader uses `RenderTypes.debugQuads()` and `Projection` / `ProjectionMatrixBuffer`. This is not a Vulkan port.
+- `@EventBusSubscriber` no longer has `bus`. `PlayerRespawnLogic` is `PlayerSpawnFinder`. `getCurrentDifficultyAt` moved from `Level` to `ServerLevel` (`getDayTime()` is `getOverworldClockTime()`). The cubic replacement moved with it.
+- `ServerLevel.setDefaultSpawnPos` is gone. Player spawn tickets are `TicketType.PLAYER_SPAWN` inside `PrepareSpawnTask`. The old spawn-ticket wraps were removed so the mixin applies. Cubic spawn tickets are not retargeted in this rung.
+- DASM: `ChunkPos.toLong()` / `asLong(int,int)` / `new ChunkPos(long)` redirects now name `pack()` / `pack(int,int)` / `unpack(long)`. Record accessors `x()` / `z()` redirect to `getX()` / `getZ()`. `ProtoChunk` constructor redirects take `PalettedContainerFactory`.
+- Tests: `TicketType.START` → `TicketType.FORCED` (no `START` constant). `BlockableEventLoop` takes `(name, propagatesCrashes)` and still needs `wrapRunnable`. `pollTask()` is protected, invoked through a test mixin. `IntegratedServer`’s constructor matches 26.1. `TestLevel` implements the new `Level` / `CollisionGetter` abstracts (`environmentAttributes`, `clockManager`, respawn data, `getWorldBorder`).
+
+`./gradlew test` is recorded at the bottom of this file after it runs.
 
 ## Next rung
 
-- **6b** — finish whatever 26.1 compile/test failures this PR cannot close (chunk-map / ticket / packet / mixin / DASM targets). Still no Vulkan.
+- **6b** — still on 26.1, no Vulkan. Restore the cube loading-screen volume (needs a cube status store; `ChunkLoadStatusView` is columns only), reattach spawn-area sizing now that `prepareLevels` uses `ChunkLoadCounter`, and retarget player spawn tickets from the deleted `setDefaultSpawnPos` onto `PrepareSpawnTask` (`TicketType.PLAYER_SPAWN`). Confirm DASM transforms apply at runtime.
 - **6c** — NeoForge **26.2.x** (newest stable at research time: `26.2.0.88`) using the 26.2 primer. Render and Vulkan changes stay human-owned; an agent should only bump the pin and apply mechanical renames the primer lists outside the renderer.
 - **After 6c** — NeoForge **26.3.x** once it leaves beta (newest at research time: `26.3.0.23-beta`). Not a target of 6a.

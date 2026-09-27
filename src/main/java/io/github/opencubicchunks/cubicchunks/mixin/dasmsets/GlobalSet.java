@@ -5,16 +5,12 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.function.Function;
 
-import javax.annotation.Nullable;
-
 import io.github.notstirred.dasm.api.annotations.redirect.redirects.MethodRedirect;
 import io.github.notstirred.dasm.api.annotations.redirect.redirects.TypeRedirect;
 import io.github.notstirred.dasm.api.annotations.redirect.sets.IntraOwnerContainer;
 import io.github.notstirred.dasm.api.annotations.redirect.sets.RedirectSet;
 import io.github.notstirred.dasm.api.annotations.selector.Ref;
-import io.github.opencubicchunks.cc_core.world.level.CloPos;
 import io.github.opencubicchunks.cubicchunks.server.level.CloTrackingView;
-import io.github.opencubicchunks.cubicchunks.server.level.progress.CloProgressListener;
 import io.github.opencubicchunks.cubicchunks.world.level.chunklike.CloAccess;
 import io.github.opencubicchunks.cubicchunks.world.level.entity.CloStatusUpdateListener;
 import net.minecraft.server.level.ChunkMap;
@@ -23,8 +19,6 @@ import net.minecraft.server.level.ChunkTrackingView;
 import net.minecraft.server.level.ServerChunkCache;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ThreadedLevelLightEngine;
-import net.minecraft.server.level.progress.ChunkProgressListener;
-import net.minecraft.server.level.progress.StoringChunkProgressListener;
 import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
 import net.minecraft.world.level.entity.ChunkStatusUpdateListener;
@@ -50,15 +44,6 @@ public interface GlobalSet extends ForgeSet {
         );
     }
 
-    @TypeRedirect(from = @Ref(ChunkProgressListener.class), to = @Ref(CloProgressListener.class))
-    interface ChunkProgressListener_to_CloProgressListener_redirects {
-        @MethodRedirect("updateSpawnPos(Lnet/minecraft/world/level/ChunkPos;)V")
-        void cc_updateSpawnPos(CloPos center);
-
-        @MethodRedirect("onStatusChange(Lnet/minecraft/world/level/ChunkPos;Lnet/minecraft/world/level/chunk/status/ChunkStatus;)V")
-        void cc_onStatusChange(CloPos chunkPosition, @Nullable ChunkStatus newStatus);
-    }
-
     @TypeRedirect(from = @Ref(ChunkStatusUpdateListener.class), to = @Ref(CloStatusUpdateListener.class))
     interface ChunkStatusUpdateListener_to_CloStatusUpdateListener_redirects {}
 
@@ -67,9 +52,6 @@ public interface GlobalSet extends ForgeSet {
 
     @TypeRedirect(from = @Ref(ChunkTrackingView.Positioned.class), to = @Ref(CloTrackingView.Positioned.class))
     abstract class ChunkTrackingView$Positioned_to_CloTrackingView$Positioned_redirects {}
-
-    @IntraOwnerContainer(@Ref(StoringChunkProgressListener.class))
-    class StoringChunkProgressListener_redirects {}
 
     @IntraOwnerContainer(@Ref(ChunkMap.class))
     class ChunkMap_redirects {}

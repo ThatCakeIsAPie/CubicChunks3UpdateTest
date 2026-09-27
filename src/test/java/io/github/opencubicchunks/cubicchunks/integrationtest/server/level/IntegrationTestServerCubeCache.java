@@ -47,7 +47,6 @@ import net.minecraft.server.level.DistanceManager;
 import net.minecraft.server.level.ServerChunkCache;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.TicketType;
-import net.minecraft.server.level.progress.ProcessorChunkProgressListener;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
@@ -120,8 +119,7 @@ public class IntegrationTestServerCubeCache extends BaseTest {
                 Runnable::run, noiseBasedChunkGeneratorMock, 10, // server view distance
                 10, // simulation distance
                 false, // sync - not relevant for tests; false should be faster
-                // Need to mock an implementation of the interface, so that it also implements CloProgressListener
-                Mockito.<ProcessorChunkProgressListener>mock(Mockito.RETURNS_DEEP_STUBS), mock(Mockito.RETURNS_DEEP_STUBS),
+                mock(Mockito.RETURNS_DEEP_STUBS),
                 mock(Mockito.RETURNS_DEEP_STUBS));
         var f = serverLevelMock.getClass().getSuperclass().getDeclaredField("chunkSource");
         f.setAccessible(true);
@@ -159,14 +157,14 @@ public class IntegrationTestServerCubeCache extends BaseTest {
             var serverChunkCache = serverChunkCacheRef.value();
             // Present chunk
             ChunkPos pos = new ChunkPos(5, -123);
-            serverChunkCache.getChunk(pos.x, pos.z, ChunkStatus.FULL, true);
-            var chunkAccess = serverChunkCache.getChunkNow(pos.x, pos.z);
+            serverChunkCache.getChunk(pos.x(), pos.z(), ChunkStatus.FULL, true);
+            var chunkAccess = serverChunkCache.getChunkNow(pos.x(), pos.z());
             assertNotNull(chunkAccess);
             assertSame(ChunkStatus.FULL, chunkAccess.getPersistedStatus());
             assertInstanceOf(LevelChunk.class, chunkAccess);
 
             // Neighbor chunk
-            chunkAccess = serverChunkCache.getChunkNow(pos.x - 1, pos.z);
+            chunkAccess = serverChunkCache.getChunkNow(pos.x() - 1, pos.z());
             assertNull(chunkAccess); // Expected to be null as getChunkNow requests at FULL
 
             // Non-present chunk
@@ -181,15 +179,15 @@ public class IntegrationTestServerCubeCache extends BaseTest {
             var serverChunkCache = serverChunkCacheRef.value();
             // Non-present chunk
             ChunkPos pos = new ChunkPos(-12, 65);
-            assertFalse(serverChunkCache.hasChunk(pos.x, pos.z));
+            assertFalse(serverChunkCache.hasChunk(pos.x(), pos.z()));
 
             // Load a chunk
-            serverChunkCache.getChunk(pos.x, pos.z, ChunkStatus.FULL, true);
+            serverChunkCache.getChunk(pos.x(), pos.z(), ChunkStatus.FULL, true);
             // Retest chunk
-            assertTrue(serverChunkCache.hasChunk(pos.x, pos.z));
+            assertTrue(serverChunkCache.hasChunk(pos.x(), pos.z()));
 
             // Neighbor chunk, expected to be false as hasChunk checks for FULL
-            assertFalse(serverChunkCache.hasChunk(pos.x - 1, pos.z)); // Ex
+            assertFalse(serverChunkCache.hasChunk(pos.x() - 1, pos.z())); // Ex
         }
     }
 
@@ -255,15 +253,15 @@ public class IntegrationTestServerCubeCache extends BaseTest {
             var serverChunkCache = serverChunkCacheRef.value();
             ChunkPos pos = new ChunkPos(-12, 65);
             // Non-present chunk
-            assertFalse(serverChunkCache.hasChunk(pos.x, pos.z));
+            assertFalse(serverChunkCache.hasChunk(pos.x(), pos.z()));
 
             // Load a chunk
-            serverChunkCache.getChunk(pos.x, pos.z, ChunkStatus.FULL, true);
+            serverChunkCache.getChunk(pos.x(), pos.z(), ChunkStatus.FULL, true);
             // Retest chunk
-            assertTrue(serverChunkCache.hasChunk(pos.x, pos.z));
+            assertTrue(serverChunkCache.hasChunk(pos.x(), pos.z()));
 
             // Neighbor chunk, expected to be false as hasChunk checks for FULL
-            assertFalse(serverChunkCache.hasChunk(pos.x - 1, pos.z));
+            assertFalse(serverChunkCache.hasChunk(pos.x() - 1, pos.z()));
         }
     }
 
@@ -310,7 +308,7 @@ public class IntegrationTestServerCubeCache extends BaseTest {
             for (int localChunkX = 0; localChunkX < CubicConstants.DIAMETER_IN_SECTIONS; localChunkX++) {
                 for (int localChunkZ = 0; localChunkZ < CubicConstants.DIAMETER_IN_SECTIONS; localChunkZ++) {
                     var chunkPos = cubePos.asChunkPos(localChunkX, localChunkZ);
-                    var chunkAccess = serverChunkCache.getChunkNow(chunkPos.x, chunkPos.z);
+                    var chunkAccess = serverChunkCache.getChunkNow(chunkPos.x(), chunkPos.z());
                     assertNotNull(chunkAccess);
                     assertSame(ChunkStatus.FULL, chunkAccess.getPersistedStatus());
                     assertInstanceOf(LevelChunk.class, chunkAccess);
@@ -325,7 +323,7 @@ public class IntegrationTestServerCubeCache extends BaseTest {
             for (int localChunkX = 0; localChunkX < CubicConstants.DIAMETER_IN_SECTIONS; localChunkX++) {
                 for (int localChunkZ = 0; localChunkZ < CubicConstants.DIAMETER_IN_SECTIONS; localChunkZ++) {
                     var chunkPos = cubePos.asChunkPos(localChunkX, localChunkZ);
-                    var chunkAccess = serverChunkCache.getChunkNow(chunkPos.x, chunkPos.z);
+                    var chunkAccess = serverChunkCache.getChunkNow(chunkPos.x(), chunkPos.z());
                     assertNull(chunkAccess);
                 }
             }
@@ -338,7 +336,7 @@ public class IntegrationTestServerCubeCache extends BaseTest {
             for (int localChunkX = 0; localChunkX < CubicConstants.DIAMETER_IN_SECTIONS; localChunkX++) {
                 for (int localChunkZ = 0; localChunkZ < CubicConstants.DIAMETER_IN_SECTIONS; localChunkZ++) {
                     var chunkPos = cubePos.asChunkPos(localChunkX, localChunkZ);
-                    var chunkAccess = serverChunkCache.getChunkNow(chunkPos.x, chunkPos.z);
+                    var chunkAccess = serverChunkCache.getChunkNow(chunkPos.x(), chunkPos.z());
                     assertNull(chunkAccess);
                 }
             }
@@ -360,7 +358,7 @@ public class IntegrationTestServerCubeCache extends BaseTest {
             for (int localChunkX = 0; localChunkX < CubicConstants.DIAMETER_IN_SECTIONS; localChunkX++) {
                 for (int localChunkZ = 0; localChunkZ < CubicConstants.DIAMETER_IN_SECTIONS; localChunkZ++) {
                     var chunkPos = cubePos.asChunkPos(localChunkX, localChunkZ);
-                    var has = serverChunkCache.hasChunk(chunkPos.x, chunkPos.z);
+                    var has = serverChunkCache.hasChunk(chunkPos.x(), chunkPos.z());
                     assertFalse(has);
                 }
             }
@@ -374,7 +372,7 @@ public class IntegrationTestServerCubeCache extends BaseTest {
             for (int localChunkX = 0; localChunkX < CubicConstants.DIAMETER_IN_SECTIONS; localChunkX++) {
                 for (int localChunkZ = 0; localChunkZ < CubicConstants.DIAMETER_IN_SECTIONS; localChunkZ++) {
                     var chunkPos = cubePos.asChunkPos(localChunkX, localChunkZ);
-                    var has = serverChunkCache.hasChunk(chunkPos.x, chunkPos.z);
+                    var has = serverChunkCache.hasChunk(chunkPos.x(), chunkPos.z());
                     assertTrue(has);
                 }
             }
@@ -387,7 +385,7 @@ public class IntegrationTestServerCubeCache extends BaseTest {
             for (int localChunkX = 0; localChunkX < CubicConstants.DIAMETER_IN_SECTIONS; localChunkX++) {
                 for (int localChunkZ = 0; localChunkZ < CubicConstants.DIAMETER_IN_SECTIONS; localChunkZ++) {
                     var chunkPos = cubePos.asChunkPos(localChunkX, localChunkZ);
-                    var has = serverChunkCache.hasChunk(chunkPos.x, chunkPos.z);
+                    var has = serverChunkCache.hasChunk(chunkPos.x(), chunkPos.z());
                     assertFalse(has);
                 }
             }
@@ -447,7 +445,7 @@ public class IntegrationTestServerCubeCache extends BaseTest {
             assertEquals(Blocks.GRASS_BLOCK.defaultBlockState(), cubeAccess.getBlockState(grass));
             assertEquals(Blocks.DIRT.defaultBlockState(), cubeAccess.getBlockState(grass.below()));
             assertEquals(Blocks.AIR.defaultBlockState(), cubeAccess.getBlockState(above));
-            assertEquals(15, cubeAccess.getBlockState(buried).getLightBlock());
+            assertEquals(15, cubeAccess.getBlockState(buried).getLightDampening());
             assertEquals(0, countBedrock((LevelCube) cubeAccess));
 
             var lightEngine = chunkCache.getLightEngine();
@@ -474,9 +472,9 @@ public class IntegrationTestServerCubeCache extends BaseTest {
             try {
                 var cube = ((ServerCubeCache) cache).cc_getCube(0, 0, 0, ChunkStatus.FULL, true);
                 assertInstanceOf(LevelCube.class, cube);
-                assertEquals(15, cube.getBlockState(torch).getLightBlock());
-                assertEquals(15, cube.getBlockState(wall).getLightBlock());
-                assertEquals(15, cube.getBlockState(behind).getLightBlock());
+                assertEquals(15, cube.getBlockState(torch).getLightDampening());
+                assertEquals(15, cube.getBlockState(wall).getLightDampening());
+                assertEquals(15, cube.getBlockState(behind).getLightDampening());
                 cube.setBlockState(torch, Blocks.AIR.defaultBlockState(), 0);
                 cube.setBlockState(beside, Blocks.AIR.defaultBlockState(), 0);
                 cube.setBlockState(behind, Blocks.AIR.defaultBlockState(), 0);
@@ -528,8 +526,8 @@ public class IntegrationTestServerCubeCache extends BaseTest {
                 BlockState kept = cube.getBlockState(generated);
                 assertEquals(CubicOverworldGenerator.blockState(CubicOverworldGenerator.DEFAULT_SEED, generated.getX(), generated.getY(),
                         generated.getZ()), kept);
-                assertEquals(15, cube.getBlockState(placed).getLightBlock());
-                assertEquals(15, kept.getLightBlock());
+                assertEquals(15, cube.getBlockState(placed).getLightDampening());
+                assertEquals(15, kept.getLightDampening());
                 cube.setBlockState(placed, Blocks.DIAMOND_BLOCK.defaultBlockState(), 0);
                 assertEquals(Blocks.DIAMOND_BLOCK.defaultBlockState(), cube.getBlockState(placed));
                 cache.save(true);
@@ -585,7 +583,7 @@ public class IntegrationTestServerCubeCache extends BaseTest {
             if (!CubicOverworldGenerator.blockState(seed, x, y - 1, z).is(Blocks.DIRT)) {
                 continue;
             }
-            if (CubicOverworldGenerator.blockState(seed, x, y - 4, z).getLightBlock() != 15) {
+            if (CubicOverworldGenerator.blockState(seed, x, y - 4, z).getLightDampening() != 15) {
                 continue;
             }
             return new BlockPos(x, y, z);
@@ -625,7 +623,7 @@ public class IntegrationTestServerCubeCache extends BaseTest {
     private static boolean solidRun(long seed, BlockPos start) {
         for (int dx = 0; dx < 4; dx++) {
             BlockState state = CubicOverworldGenerator.blockState(seed, start.getX() + dx, start.getY(), start.getZ());
-            if (state.getLightBlock() != 15) {
+            if (state.getLightDampening() != 15) {
                 return false;
             }
         }
@@ -654,7 +652,7 @@ public class IntegrationTestServerCubeCache extends BaseTest {
             var serverChunkCache = serverChunkCacheRef.value();
             var cubicServerChunkCache = ((ServerCubeCache) serverChunkCache);
             int spawnRadius = Coords.sectionToCube(11);
-            cubicServerChunkCache.cc_addTicketWithRadius(TicketType.START, CloPos.cube(0, 0, 0), spawnRadius);
+            cubicServerChunkCache.cc_addTicketWithRadius(TicketType.FORCED, CloPos.cube(0, 0, 0), spawnRadius);
             serverChunkCache.tick(() -> true, false);
             var cubeAccess = cubicServerChunkCache.cc_getCube(0, 0, 0, ChunkStatus.FULL, true);
             assertNotNull(cubeAccess);
@@ -686,8 +684,8 @@ public class IntegrationTestServerCubeCache extends BaseTest {
                 LevelCube serverCube = (LevelCube) first;
                 generatedA = serverCube.getBlockState(digA);
                 generatedB = serverCube.getBlockState(digB);
-                assertEquals(15, generatedA.getLightBlock());
-                assertEquals(15, generatedB.getLightBlock());
+                assertEquals(15, generatedA.getLightDampening());
+                assertEquals(15, generatedB.getLightDampening());
 
                 CCClientboundLevelCubeWithLightPacket full = roundTrip(new CCClientboundLevelCubeWithLightPacket(serverCube));
                 LevelCube clientA = clientCopy(cache.level, full);

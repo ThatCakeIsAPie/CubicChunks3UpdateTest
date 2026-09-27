@@ -3,14 +3,11 @@ package io.github.opencubicchunks.cubicchunks.mixin.core.common.server.level;
 import java.util.List;
 import java.util.concurrent.Executor;
 
-import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
-import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import io.github.notstirred.dasm.api.annotations.Dasm;
 import io.github.notstirred.dasm.api.annotations.redirect.redirects.AddMethodToSets;
 import io.github.notstirred.dasm.api.annotations.redirect.redirects.AddTransformToSets;
 import io.github.notstirred.dasm.api.annotations.selector.Ref;
 import io.github.notstirred.dasm.api.annotations.transform.TransformFromMethod;
-import io.github.opencubicchunks.cc_core.world.level.CloPos;
 import io.github.opencubicchunks.cubicchunks.mixin.core.common.world.level.MixinLevel;
 import io.github.opencubicchunks.cubicchunks.mixin.dasmsets.ChunkToCloSet;
 import io.github.opencubicchunks.cubicchunks.mixin.dasmsets.ChunkToCubeSet;
@@ -23,10 +20,7 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerChunkCache;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.server.level.TicketType;
-import net.minecraft.server.level.progress.ChunkProgressListener;
-import net.minecraft.world.RandomSequences;
-import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.DifficultyInstance;
 import net.minecraft.world.level.dimension.LevelStem;
 import net.minecraft.world.level.storage.LevelStorageSource;
 import net.minecraft.world.level.storage.ServerLevelData;
@@ -36,17 +30,19 @@ import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Dasm(value = ChunkToCloSet.class, target = @Ref(ServerLevel.class))
 @Mixin(ServerLevel.class)
 public abstract class MixinServerLevel extends MixinLevel implements CubicServerLevel {
     @Shadow @Final private ServerChunkCache chunkSource;
+    @Shadow public abstract float getMoonBrightness(BlockPos pos);
+    @Shadow public abstract long getOverworldClockTime();
 
     @Inject(method = "<init>", at = @At("CTOR_HEAD"))
     private void cc_onInit(
             MinecraftServer server, Executor dispatcher, LevelStorageSource.LevelStorageAccess levelStorageAccess, ServerLevelData serverLevelData,
-            ResourceKey dimension, LevelStem levelStem, ChunkProgressListener progressListener, boolean isDebug, long biomeZoomSeed,
-            List customSpawners, boolean tickTime, RandomSequences randomSequences, CallbackInfo ci
+            ResourceKey dimension, LevelStem levelStem, boolean isDebug, long biomeZoomSeed, List customSpawners, boolean tickTime, CallbackInfo ci
     ) {
         // TODO conditionally mark as cubic based on dimension, config, level data, etc
     }
@@ -59,29 +55,23 @@ public abstract class MixinServerLevel extends MixinLevel implements CubicServer
     @TransformFromMethod("startTickingChunk(Lnet/minecraft/world/level/chunk/LevelChunk;)V")
     public native void cc_startTickingClo(LevelClo chunk);
 
-    @WrapOperation(method = "setDefaultSpawnPos", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/level/ServerChunkCache;removeTicketWithRadius(Lnet/minecraft/server/level/TicketType;"
-            + "Lnet/minecraft/world/level/ChunkPos;I)V"))
-    private void cc_onSetDefaultSpawnPos_removeTicketWithRadius(
-            ServerChunkCache instance, TicketType ticket, ChunkPos chunkPos, int radius, Operation<Void> original, BlockPos pos
-    ) {
+    // 26.1 moved getCurrentDifficultyAt from Level onto ServerLevel. Same cubic replacement as before: cube inhabited time
+    // and moon brightness, with the clock now read from getOverworldClockTime().
+    @Inject(method = "getCurrentDifficultyAt", at = @At(value = "HEAD"), cancellable = true)
+    private void cc_replaceGetCurrentDifficultyAt(BlockPos blockPos, CallbackInfoReturnable<DifficultyInstance> cir) {
         if (cc_isCubic) {
-            ((ServerCubeCache) instance).cc_removeTicketWithRadius(ticket, CloPos.cube(pos), radius);
-        } else {
-            original.call(instance, ticket, chunkPos, radius);
+            long inhabitedTime = 0L;
+            float moonBrightness = 0.0F;
+            if (this.cc_hasCubeAt(blockPos)) {
+                moonBrightness = this.getMoonBrightness(blockPos);
+                inhabitedTime = this.cc_getCubeAt(blockPos).getInhabitedTime();
+            }
+            cir.setReturnValue(new DifficultyInstance(this.getDifficulty(), this.getOverworldClockTime(), inhabitedTime, moonBrightness));
         }
     }
 
-    @WrapOperation(method = "setDefaultSpawnPos", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/level/ServerChunkCache;addTicketWithRadius(Lnet/minecraft/server/level/TicketType;"
-            + "Lnet/minecraft/world/level/ChunkPos;I)V"))
-    private void cc_onSetDefaultSpawnPos_addicketWithRadius(
-            ServerChunkCache instance, TicketType ticket, ChunkPos chunkPos, int radius, Operation<Void> original, BlockPos pos
-    ) {
-        if (cc_isCubic) {
-            ((ServerCubeCache) instance).cc_addTicketWithRadius(ticket, CloPos.cube(pos), radius);
-        } else {
-            original.call(instance, ticket, chunkPos, radius);
-        }
-    }
+    // 26.1 removed ServerLevel.setDefaultSpawnPos. Player spawn tickets are TicketType.PLAYER_SPAWN inside PrepareSpawnTask.
+    // Retargeting that config task is Phase 6b (multiplayer), not this rung.
 
     @AddMethodToSets(containers = ChunkToCloSet.ServerLevel_redirects.class, method = "tickChunk(Lnet/minecraft/world/level/chunk/LevelChunk;I)V")
     public void cc_tickClo(LevelClo levelClo, int randomTickSpeed) {

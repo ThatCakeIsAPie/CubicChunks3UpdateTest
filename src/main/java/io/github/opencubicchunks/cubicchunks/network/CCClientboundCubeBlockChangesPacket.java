@@ -19,7 +19,7 @@ import net.minecraft.core.SectionPos;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
@@ -36,7 +36,7 @@ import net.neoforged.neoforge.network.handling.IPayloadHandler;
 public record CCClientboundCubeBlockChangesPacket(CubePos pos, List<Change> changes, CubeLightPacketData light) implements CustomPacketPayload {
 
     public static final Type<CCClientboundCubeBlockChangesPacket> TYPE = new Type<>(
-            ResourceLocation.fromNamespaceAndPath(CubicChunks.MODID, "cube_block_changes"));
+            Identifier.fromNamespaceAndPath(CubicChunks.MODID, "cube_block_changes"));
 
     public static final StreamCodec<FriendlyByteBuf, CCClientboundCubeBlockChangesPacket> STREAM_CODEC = StreamCodec
             .of(CCClientboundCubeBlockChangesPacket::encode, CCClientboundCubeBlockChangesPacket::decode);

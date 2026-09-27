@@ -9,13 +9,13 @@ import io.netty.buffer.ByteBuf;
 import net.minecraft.client.multiplayer.ClientChunkCache;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 import net.neoforged.neoforge.network.handling.IPayloadHandler;
 
 public record CCClientboundSetCubeCacheCenterPacket(CubePos pos) implements CustomPacketPayload {
     public static final CustomPacketPayload.Type<CCClientboundSetCubeCacheCenterPacket> TYPE = new CustomPacketPayload.Type<>(
-            ResourceLocation.fromNamespaceAndPath(CubicChunks.MODID, "set_cube_cache_center"));
+            Identifier.fromNamespaceAndPath(CubicChunks.MODID, "set_cube_cache_center"));
 
     public static final StreamCodec<ByteBuf, CCClientboundSetCubeCacheCenterPacket> STREAM_CODEC = StreamCodec.composite(CUBE_POS_STREAM_CODEC,
             CCClientboundSetCubeCacheCenterPacket::pos, CCClientboundSetCubeCacheCenterPacket::new);
