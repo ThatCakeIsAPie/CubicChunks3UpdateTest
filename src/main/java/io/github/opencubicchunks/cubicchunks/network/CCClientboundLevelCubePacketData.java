@@ -27,8 +27,13 @@ public class CCClientboundLevelCubePacketData {
     };
 
     public CCClientboundLevelCubePacketData(LevelCube cube) {
-        buffer = new byte[calculateChunkSize(cube)];
-        extractChunkData(new FriendlyByteBuf(this.getWriteBuffer()), cube);
+        buffer = cube.cc_callWithBlockLock(() -> {
+            byte[] bytes = new byte[calculateChunkSize(cube)];
+            ByteBuf writeBuffer = Unpooled.wrappedBuffer(bytes);
+            writeBuffer.writerIndex(0);
+            extractChunkData(new FriendlyByteBuf(writeBuffer), cube);
+            return bytes;
+        });
     }
 
     public CCClientboundLevelCubePacketData(final FriendlyByteBuf byteBuf) {

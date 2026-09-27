@@ -50,7 +50,7 @@ public interface ClientCubeCache extends CubeSource {
         public final AtomicReferenceArray<LevelCube> chunks;
         final LongOpenHashSet loadedEmptySections = new LongOpenHashSet();
         public final int cubeRadius;
-        private final int viewRange;
+        public final int viewRange;
         public volatile int viewCenterX;
         public volatile int viewCenterY;
         public volatile int viewCenterZ;
@@ -158,6 +158,49 @@ public interface ClientCubeCache extends CubeSource {
         public boolean inRange(int x, int y, int z) {
             return Math.abs(x - this.viewCenterX) <= this.cubeRadius && Math.abs(y - this.viewCenterY) <= this.cubeRadius
                     && Math.abs(z - this.viewCenterZ) <= this.cubeRadius;
+        }
+
+        /**
+         * Drops the cube at this position even when it is outside the view. The index is a modulus of the absolute
+         * coordinates, so a forget that arrives after {@link #dropOutsideRange} still names the same slot. A forget that
+         * arrives after the center packet must not be ignored just because the cube is no longer {@link #inRange}.
+         *
+         * @return whether a cube at that exact position was removed
+         */
+        public boolean dropAt(int x, int y, int z) {
+            int index = this.getIndex(x, y, z);
+            LevelCube present = this.chunks.get(index);
+            if (present == null) {
+                return false;
+            }
+            CubePos presentPos = present.cc_getCubePos();
+            if (presentPos.getX() != x || presentPos.getY() != y || presentPos.getZ() != z) {
+                return false;
+            }
+            this.drop(index, present);
+            return true;
+        }
+
+        /**
+         * Drops every stored cube that is no longer inside the view. Used when the center jumps farther than the storage
+         * margin, so a lost forget cannot resurrect a stale cube when the player comes back.
+         *
+         * @return how many cubes were dropped
+         */
+        public int dropOutsideRange() {
+            int dropped = 0;
+            for (int index = 0; index < this.chunks.length(); index++) {
+                LevelCube present = this.chunks.get(index);
+                if (present == null) {
+                    continue;
+                }
+                CubePos presentPos = present.cc_getCubePos();
+                if (!this.inRange(presentPos.getX(), presentPos.getY(), presentPos.getZ())) {
+                    this.drop(index, present);
+                    dropped++;
+                }
+            }
+            return dropped;
         }
 
         @TransformFromMethod(owner = @Ref(ClientChunkCache.Storage.class), value = "getChunk(I)Lnet/minecraft/world/level/chunk/LevelChunk;", visibility = PUBLIC)
